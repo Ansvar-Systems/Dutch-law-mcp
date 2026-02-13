@@ -1,0 +1,63 @@
+{
+  "manifest_version": "0.3",
+  "name": "dutch-law-mcp",
+  "display_name": "Dutch Law MCP Server",
+  "version": "1.0.0",
+  "description": "Production-grade Dutch legal research MCP server with comprehensive statute coverage and EU law cross-references",
+  "author": {
+    "name": "Ansvar Systems",
+    "email": "hello@ansvar.eu",
+    "url": "https://ansvar.eu"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ansvar-Systems/Dutch-law-mcp"
+  },
+  "homepage": "https://ansvar.eu",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ai",
+    "claude",
+    "dutch-law",
+    "netherlands",
+    "legal",
+    "compliance",
+    "wetten",
+    "bwb",
+    "rechtspraak",
+    "ansvar"
+  ],
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/index.js"],
+      "env": {}
+    }
+  },
+  "tools": [
+    { "name": "search_legislation" },
+    { "name": "get_provision" },
+    { "name": "search_case_law" },
+    { "name": "get_preparatory_works" },
+    { "name": "validate_citation" },
+    { "name": "build_legal_stance" },
+    { "name": "format_citation" },
+    { "name": "check_currency" },
+    { "name": "get_eu_basis" },
+    { "name": "get_dutch_implementations" },
+    { "name": "search_eu_implementations" },
+    { "name": "get_provision_eu_basis" },
+    { "name": "validate_eu_compliance" },
+    { "name": "get_provision_at_date" }
+  ],
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  }
+}
