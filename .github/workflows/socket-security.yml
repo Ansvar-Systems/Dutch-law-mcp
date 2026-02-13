@@ -1,0 +1,36 @@
+name: Socket Security
+
+# SETUP REQUIRED: This workflow requires a Socket.dev account (free for open source).
+# 1. Sign up at https://socket.dev
+# 2. No API key secret is needed — the action uses GITHUB_TOKEN.
+# If Socket.dev is not set up, remove this workflow to avoid silent failures.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  socket-security:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run Socket Security
+        uses: SocketDev/action@v1
+        with:
+          issue-severity: high

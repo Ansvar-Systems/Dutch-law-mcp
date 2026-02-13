@@ -1,0 +1,28 @@
+# Gitleaks configuration for Dutch Law MCP
+# https://github.com/gitleaks/gitleaks
+
+title = "Dutch Law MCP - Secret Detection"
+
+[extend]
+# Use default gitleaks rules
+useDefault = true
+
+[allowlist]
+description = "Known false positives and example credentials"
+
+# Example/development tokens in documentation
+regexes = [
+  '''dev-token''',
+  '''example-token''',
+  '''your-token-here''',
+  '''<password>''',
+  '''user:pass''',
+]
+
+# Files to skip (narrowly scoped to known false-positive patterns)
+paths = [
+  '''tests/fixtures/.*''',
+  '''data/seed/.*\.json$''',
+  '''\.env\.local$''',
+  '''\.env\..*\.local$''',
+]

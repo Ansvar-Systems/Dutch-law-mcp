@@ -34,7 +34,7 @@ const SRU_PAGE_SIZE = 50;
 
 const BWB_XML_BASE = 'https://repository.officiele-overheidspublicaties.nl/bwb';
 
-const RATE_LIMIT_MS = 500;
+const RATE_LIMIT_MS = 2000;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -52,6 +52,7 @@ function sleep(ms: number): Promise<void> {
 interface SRURecord {
   bwbId: string;
   title: string;
+  toestandUrl?: string;
 }
 
 /**
@@ -110,21 +111,24 @@ async function fetchSRUPage(startRecord: number): Promise<{
     const recordData = rec['recordData'] as Record<string, unknown> | undefined;
     if (!recordData) continue;
 
-    // Try to extract BWB-ID from the OAI-PMH or Dublin Core metadata
+    // Extract BWB-ID from the SRU metadata
+    // Structure: recordData > gzd > originalData > meta > owmskern > identifier
     const gzd = recordData['gzd'] as Record<string, unknown> | undefined;
     const originalData = gzd?.['originalData'] as Record<string, unknown> | undefined;
+    const enrichedData = gzd?.['enrichedData'] as Record<string, unknown> | undefined;
 
     let bwbId = '';
     let title = '';
+    let toestandUrl: string | undefined;
 
     if (originalData) {
-      const owmsKern = originalData['owmskern'] as Record<string, unknown>
-        ?? originalData['owms-kern'] as Record<string, unknown> | undefined;
+      // The SRU response wraps owmskern inside overheidbwb:meta (becomes 'meta' after NS removal)
+      const meta = originalData['meta'] as Record<string, unknown> | undefined;
+      const owmsKern = (meta?.['owmskern'] ?? originalData['owmskern'] ?? originalData['owms-kern']) as Record<string, unknown> | undefined;
 
       if (owmsKern) {
         const identifier = owmsKern['identifier'];
         if (typeof identifier === 'string') {
-          // Extract BWB-ID from identifier URL like https://wetten.overheid.nl/BWBR0001840
           const match = identifier.match(/BWB[RV]\d+/);
           if (match) bwbId = match[0];
         } else if (identifier && typeof identifier === 'object') {
@@ -142,17 +146,23 @@ async function fetchSRUPage(startRecord: number): Promise<{
       }
     }
 
-    // Alternative: try enrichedData path
-    if (!bwbId) {
-      const enrichedData = gzd?.['enrichedData'] as Record<string, unknown> | undefined;
-      if (enrichedData) {
-        const bwbIdNode = enrichedData['bwb-id'] ?? enrichedData['bwbId'];
-        if (bwbIdNode) bwbId = String(bwbIdNode);
+    // Get the toestand URL from enrichedData (has the correct date-versioned path)
+    if (enrichedData) {
+      const locatie = enrichedData['locatie_toestand'];
+      if (typeof locatie === 'string') {
+        toestandUrl = locatie;
+      }
+
+      // Fallback: extract BWB-ID from enriched data
+      if (!bwbId) {
+        const locStr = typeof locatie === 'string' ? locatie : '';
+        const match = locStr.match(/BWB[RV]\d+/);
+        if (match) bwbId = match[0];
       }
     }
 
     if (bwbId) {
-      records.push({ bwbId, title });
+      records.push({ bwbId, title, toestandUrl });
     }
   }
 
@@ -161,8 +171,10 @@ async function fetchSRUPage(startRecord: number): Promise<{
 
 /**
  * Fetch the toestand XML for a BWB-ID and parse it into provisions.
+ * If a toestandUrl is provided (from SRU enrichedData), use that directly.
+ * Otherwise, fall back to the generic URL pattern.
  */
-async function fetchAndParseBWB(bwbId: string): Promise<{
+async function fetchAndParseBWB(bwbId: string, toestandUrl?: string): Promise<{
   title: string;
   provisions: Array<{
     provision_ref: string;
@@ -174,7 +186,7 @@ async function fetchAndParseBWB(bwbId: string): Promise<{
     content: string;
   }>;
 } | null> {
-  const xmlUrl = `${BWB_XML_BASE}/${bwbId}/xml/${bwbId}.xml`;
+  const xmlUrl = toestandUrl ?? `${BWB_XML_BASE}/${bwbId}/xml/${bwbId}.xml`;
 
   try {
     const response = await fetch(xmlUrl);
@@ -261,7 +273,7 @@ async function main(): Promise<void> {
 
     console.log(`  Found ${allRecords.length} / ${totalRecords} records`);
 
-    if (page.nextRecordPosition == null || page.records.length === 0) {
+    if (page.nextRecordPosition == null) {
       break;
     }
 
@@ -269,7 +281,17 @@ async function main(): Promise<void> {
     await sleep(RATE_LIMIT_MS);
   }
 
-  console.log(`Discovered ${allRecords.length} statutes.`);
+  console.log(`Discovered ${allRecords.length} toestand records.`);
+
+  // Deduplicate by BWB-ID, keeping the first occurrence (SRU returns multiple toestand versions per statute)
+  const seenBwbIds = new Map<string, SRURecord>();
+  for (const record of allRecords) {
+    if (!seenBwbIds.has(record.bwbId)) {
+      seenBwbIds.set(record.bwbId, record);
+    }
+  }
+  const uniqueRecords = Array.from(seenBwbIds.values());
+  console.log(`Unique statutes: ${uniqueRecords.length}`);
   console.log();
 
   // 2. Fetch and parse each statute
@@ -277,20 +299,20 @@ async function main(): Promise<void> {
   let successCount = 0;
   let errorCount = 0;
 
-  for (let i = 0; i < allRecords.length; i++) {
-    const record = allRecords[i];
+  for (let i = 0; i < uniqueRecords.length; i++) {
+    const record = uniqueRecords[i];
     const seedPath = path.join(SEED_DIR, `${record.bwbId}.json`);
 
     // Skip if seed file already exists
     if (fs.existsSync(seedPath)) {
-      console.log(`  [${i + 1}/${allRecords.length}] ${record.bwbId} — already exists, skipping`);
+      console.log(`  [${i + 1}/${uniqueRecords.length}] ${record.bwbId} — already exists, skipping`);
       successCount++;
       continue;
     }
 
-    console.log(`  [${i + 1}/${allRecords.length}] ${record.bwbId} — fetching...`);
+    console.log(`  [${i + 1}/${uniqueRecords.length}] ${record.bwbId} — fetching...`);
 
-    const result = await fetchAndParseBWB(record.bwbId);
+    const result = await fetchAndParseBWB(record.bwbId, record.toestandUrl);
 
     if (result && result.provisions.length > 0) {
       writeSeedFile(record.bwbId, result.title || record.title, result.provisions);

@@ -108,9 +108,13 @@ npm run test:coverage   # With coverage report
 ```bash
 npm run ingest              # Ingest statutes from wetten.overheid.nl (BWB)
 npm run ingest:cases        # Ingest case law from rechtspraak.nl
+npm run ingest:prep-works   # Ingest kamerstukken (parliamentary documents)
 npm run build:db            # Build the SQLite database from seed files
 npm run audit:seeds         # Validate seed file schema compliance
 npm run check-updates       # Check for legal data updates
+npm run extract:definitions # Extract legal term definitions from statutes
+npm run fetch:eurlex        # Fetch EU document metadata from EUR-Lex
+npm run import:eurlex-documents  # Import EU law references into database
 ```
 
 ### Project Structure

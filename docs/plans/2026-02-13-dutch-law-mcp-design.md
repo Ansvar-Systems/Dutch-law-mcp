@@ -44,10 +44,7 @@ Dutch-law-mcp/
 │   │   ├── formatter.ts                  # Dutch citation formatter
 │   │   └── validator.ts                  # Citation validator
 │   ├── parsers/
-│   │   ├── provision-parser.ts           # Parse BWB XML -> provisions
-│   │   ├── bwb-xml-parser.ts             # Parse wetten.overheid.nl XML structure
-│   │   ├── amendment-parser.ts           # Parse amendment metadata
-│   │   ├── cross-ref-extractor.ts        # Extract cross-references
+│   │   ├── bwb-xml-parser.ts             # Parse wetten.overheid.nl XML structure and provisions
 │   │   └── eu-reference-parser.ts        # Extract EU references (Dutch keywords)
 │   ├── tools/
 │   │   ├── search-legislation.ts         # Tool 1: FTS5 provision search
@@ -78,7 +75,7 @@ Dutch-law-mcp/
 │   ├── fetch-eurlex-metadata.ts          # Fetch EU document metadata
 │   └── import-eurlex-documents.ts        # Import EU law references
 ├── tests/
-│   ├── fixtures/test-db.ts               # In-memory test database with Dutch data
+│   ├── fixtures/test-db.test.ts          # In-memory test database with Dutch data
 │   ├── citation/
 │   │   ├── parser.test.ts
 │   │   ├── formatter.test.ts
@@ -89,10 +86,12 @@ Dutch-law-mcp/
 │   └── tools/
 │       ├── search-legislation.test.ts
 │       ├── get-provision.test.ts
-│       ├── validate-citation.test.ts
-│       ├── check-currency.test.ts
+│       ├── search-case-law.test.ts
 │       ├── get-preparatory-works.test.ts
+│       ├── validate-citation.test.ts
+│       ├── format-citation.test.ts
 │       ├── build-legal-stance.test.ts
+│       ├── check-currency.test.ts
 │       └── eu-cross-reference.test.ts
 ├── data/
 │   ├── seed/                             # JSON seed files per statute (BWB-ID.json)
@@ -100,8 +99,7 @@ Dutch-law-mcp/
 ├── docs/
 │   └── plans/
 ├── .github/workflows/
-│   ├── check-updates.yml                 # Daily data freshness check
-│   └── security.yml
+│   └── check-updates.yml                 # Daily data freshness check
 ├── package.json
 ├── tsconfig.json
 ├── vitest.config.ts
@@ -424,23 +422,23 @@ Step 5: Build Database (build-db.ts)
 | # | Name | Input | Output |
 |---|------|-------|--------|
 | 1 | `search_legislation` | `query`, `document_id?`, `status?`, `as_of_date?`, `limit?` | Ranked provisions with snippets (FTS5 BM25) |
-| 2 | `get_provision` | `document_id` (BWB-ID), `article_ref` (e.g., "6:162"), `as_of_date?` | Full provision text with metadata |
-| 3 | `search_case_law` | `query`, `court?`, `date_from?`, `date_to?`, `legal_domain?`, `limit?` | Ranked case law with summaries |
-| 4 | `get_preparatory_works` | `statute_id` (BWB-ID) | Linked kamerstukken, MvT, MvA documents |
+| 2 | `get_provision` | `document_id` (BWB-ID), `book?`, `article?`, `provision_ref?` (e.g., "6:162"), `as_of_date?` | Full provision text with metadata |
+| 3 | `search_case_law` | `query?`, `court?`, `ecli?`, `legal_domain?`, `procedure_type?`, `date_from?`, `date_to?`, `limit?` | Ranked case law with summaries |
+| 4 | `get_preparatory_works` | `statute_id` (BWB-ID), `document_type?`, `limit?` | Linked kamerstukken, MvT, MvA documents |
 | 5 | `validate_citation` | `citation` (string) | Parsed citation + database existence check |
-| 6 | `build_legal_stance` | `query`, `as_of_date?`, `limit?` | Combined statutes + case law + kamerstukken results |
-| 7 | `format_citation` | `document_id`, `provision_ref?`, `format?` | Formatted Dutch citation string |
+| 6 | `build_legal_stance` | `query`, `document_id?`, `as_of_date?`, `limit?` | Combined statutes + case law + kamerstukken results |
+| 7 | `format_citation` | `citation`, `format?` (full/short/pinpoint) | Formatted Dutch citation string |
 | 8 | `check_currency` | `document_id`, `provision_ref?`, `as_of_date?` | In-force status, dates, warnings |
 
 ### EU Law Integration Tools
 
 | # | Name | Input | Output |
 |---|------|-------|--------|
-| 9 | `get_eu_basis` | `document_id` (BWB-ID) | EU directives/regulations the statute implements |
+| 9 | `get_eu_basis` | `document_id` (BWB-ID), `include_articles?`, `reference_types?` | EU directives/regulations the statute implements |
 | 10 | `get_dutch_implementations` | `eu_document_id`, `primary_only?`, `in_force_only?` | Dutch laws implementing the EU act |
-| 11 | `search_eu_implementations` | `query`, `type?`, `year_from?`, `year_to?` | EU documents matching search |
+| 11 | `search_eu_implementations` | `query?`, `type?`, `year_from?`, `year_to?`, `community?`, `has_dutch_implementation?`, `limit?` | EU documents matching search |
 | 12 | `get_provision_eu_basis` | `document_id`, `provision_ref` | EU article(s) referenced by specific provision |
-| 13 | `validate_eu_compliance` | `document_id` | Compliance status against referenced EU acts |
+| 13 | `validate_eu_compliance` | `document_id`, `provision_ref?`, `eu_document_id?` | Compliance status against referenced EU acts |
 
 ## Dutch Citation Parser
 

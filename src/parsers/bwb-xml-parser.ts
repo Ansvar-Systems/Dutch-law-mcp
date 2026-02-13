@@ -254,26 +254,46 @@ export function parseBwbXml(xml: string): ParsedStatute {
 
   const doc = parser.parse(xml) as Record<string, unknown>;
 
-  // Navigate to the root wet-besluit > wetgeving
-  const wetBesluit = doc['wet-besluit'] as Record<string, unknown> | undefined;
-  if (!wetBesluit) {
-    return { bwb_id: '', title: '', provisions: [] };
+  // Navigate the XML structure. Real BWB toestand XMLs use:
+  //   <toestand bwb-id="..."> <wetgeving> <wet-besluit> <wettekst> ... </wettekst> </wet-besluit> </wetgeving> </toestand>
+  // But the test fixtures may use a simpler structure:
+  //   <wet-besluit> <wetgeving> ... </wetgeving> </wet-besluit>
+  const toestand = doc['toestand'] as Record<string, unknown> | undefined;
+
+  let wetgeving: Record<string, unknown> | undefined;
+  let bwbId = '';
+
+  if (toestand) {
+    // Real toestand XML: toestand > wetgeving
+    bwbId = toestand['@_bwb-id'] ? String(toestand['@_bwb-id']) : '';
+    wetgeving = toestand['wetgeving'] as Record<string, unknown> | undefined;
+  } else {
+    // Legacy/test format: wet-besluit > wetgeving
+    const wetBesluit = doc['wet-besluit'] as Record<string, unknown> | undefined;
+    if (!wetBesluit) {
+      return { bwb_id: '', title: '', provisions: [] };
+    }
+    wetgeving = wetBesluit['wetgeving'] as Record<string, unknown> | undefined;
   }
 
-  const wetgeving = wetBesluit['wetgeving'] as Record<string, unknown> | undefined;
   if (!wetgeving) {
-    return { bwb_id: '', title: '', provisions: [] };
+    return { bwb_id: bwbId, title: '', provisions: [] };
   }
 
-  // Extract BWB-ID
-  const bwbId = wetgeving['@_bwb-id'] ? String(wetgeving['@_bwb-id']) : '';
+  // Extract BWB-ID (may be on wetgeving if not on toestand)
+  if (!bwbId && wetgeving['@_bwb-id']) {
+    bwbId = String(wetgeving['@_bwb-id']);
+  }
 
-  // Extract title from intitule
+  // Extract title from intitule or citeertitel
   const intitule = wetgeving['intitule'];
-  const title = intitule ? extractText(intitule).trim() : '';
+  const citeertitel = wetgeving['citeertitel'];
+  const title = (intitule ? extractText(intitule).trim() : '')
+    || (citeertitel ? extractText(citeertitel).trim() : '');
 
-  // Navigate to wettekst
-  const wettekst = wetgeving['wettekst'] as Record<string, unknown> | undefined;
+  // Navigate to wettekst — may be under wet-besluit inside wetgeving
+  const wetBesluitInner = wetgeving['wet-besluit'] as Record<string, unknown> | undefined;
+  const wettekst = (wetBesluitInner?.['wettekst'] ?? wetgeving['wettekst']) as Record<string, unknown> | undefined;
   if (!wettekst) {
     return { bwb_id: bwbId, title, provisions: [] };
   }

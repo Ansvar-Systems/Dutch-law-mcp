@@ -1,7 +1,101 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# GIT IGNORE
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ───────────────────────────────────────────────────────────────────────────
+# NODE
+# ───────────────────────────────────────────────────────────────────────────
+
+# Dependencies
 node_modules/
+
+# Build output
 dist/
-data/database.db
-*.db-journal
-*.db-wal
+
+# Test coverage
 coverage/
+
+# npm debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ───────────────────────────────────────────────────────────────────────────
+# DATA
+# ───────────────────────────────────────────────────────────────────────────
+
+# Database file (generated from seed data)
+data/database.db
+
+# Seed files (too large for git - 700MB+)
+data/seed/
+
+# SQLite journal files
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+
+# ───────────────────────────────────────────────────────────────────────────
+# ENVIRONMENT
+# ───────────────────────────────────────────────────────────────────────────
+
+# Environment variables
 .env
+.env.local
+.env.*.local
+
+# ───────────────────────────────────────────────────────────────────────────
+# IDE
+# ───────────────────────────────────────────────────────────────────────────
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# JetBrains (WebStorm, IntelliJ)
+.idea/
+*.iml
+
+# Vim
+*.swp
+*.swo
+*~
+
+# ───────────────────────────────────────────────────────────────────────────
+# OS
+# ───────────────────────────────────────────────────────────────────────────
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# ───────────────────────────────────────────────────────────────────────────
+# MISC
+# ───────────────────────────────────────────────────────────────────────────
+
+# TypeScript incremental compilation
+*.tsbuildinfo
+
+# Lock files (keep package-lock.json, ignore others)
+yarn.lock
+pnpm-lock.yaml
+
+# Logs
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+.serena/
+.claude/
