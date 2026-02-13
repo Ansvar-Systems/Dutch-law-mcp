@@ -1,0 +1,62 @@
+{
+  "name": "@ansvar/dutch-law-mcp",
+  "version": "1.0.0",
+  "description": "Production-grade Dutch legal research MCP server with comprehensive statute coverage and EU law cross-references",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "dutch-law-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "data/database.db"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build:db": "tsx scripts/build-db.ts",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "ingest": "tsx scripts/ingest-bwb.ts",
+    "ingest:cases": "tsx scripts/ingest-rechtspraak.ts",
+    "ingest:prep-works": "tsx scripts/ingest-preparatory-works.ts",
+    "check-updates": "tsx scripts/check-updates.ts",
+    "extract:definitions": "tsx scripts/extract-definitions.ts",
+    "audit:seeds": "tsx scripts/audit-seeds.ts",
+    "fetch:eurlex": "tsx scripts/fetch-eurlex-metadata.ts",
+    "import:eurlex-documents": "tsx scripts/import-eurlex-documents.ts",
+    "prepublishOnly": "npm run build",
+    "postinstall": "test -d dist || npm run build || true"
+  },
+  "dependencies": {
+    "@ansvar/mcp-sqlite": "^1.0.0",
+    "@modelcontextprotocol/sdk": "^1.25.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.29",
+    "fast-xml-parser": "^5.3.5",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ansvar-Systems/Dutch-law-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Ansvar-Systems/Dutch-law-mcp/issues"
+  },
+  "homepage": "https://github.com/Ansvar-Systems/Dutch-law-mcp#readme",
+  "keywords": [
+    "mcp", "model-context-protocol", "ai", "claude",
+    "dutch-law", "netherlands", "legal", "compliance",
+    "wetten", "bwb", "rechtspraak", "ansvar"
+  ],
+  "author": "Ansvar Systems AB <hello@ansvar.ai>",
+  "license": "Apache-2.0"
+}
