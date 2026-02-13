@@ -1,0 +1,16 @@
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      dbPath:
+        type: string
+        description: "Path to the SQLite database"
+    required: []
+  commandFunction:
+    |-
+    (config) => ({
+      command: 'node',
+      args: ['dist/index.js'],
+      env: config.dbPath ? { DUTCH_LAW_DB_PATH: config.dbPath } : {}
+    })
