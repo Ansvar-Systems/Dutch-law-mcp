@@ -5,11 +5,8 @@
  * up ListTools + CallTool handlers on any MCP Server instance.
  */
 
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-  Tool,
-} from '@modelcontextprotocol/sdk/types.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type Database from '@ansvar/mcp-sqlite';
 
@@ -22,12 +19,17 @@ import { buildLegalStance, type BuildLegalStanceInput } from './build-legal-stan
 import { formatCitationTool, type FormatCitationInput } from './format-citation.js';
 import { checkCurrency, type CheckCurrencyInput } from './check-currency.js';
 import { getEUBasis, type GetEUBasisInput } from './get-eu-basis.js';
-import { getDutchImplementations, type GetDutchImplementationsInput } from './get-dutch-implementations.js';
-import { searchEUImplementations, type SearchEUImplementationsInput } from './search-eu-implementations.js';
+import {
+  getDutchImplementations,
+  type GetDutchImplementationsInput,
+} from './get-dutch-implementations.js';
+import {
+  searchEUImplementations,
+  type SearchEUImplementationsInput,
+} from './search-eu-implementations.js';
 import { getProvisionEUBasis, type GetProvisionEUBasisInput } from './get-provision-eu-basis.js';
 import { validateEUCompliance, type ValidateEUComplianceInput } from './validate-eu-compliance.js';
 import { getProvisionAtDate, type GetProvisionAtDateInput } from './get-provision-at-date.js';
-
 
 const READ_ONLY_ANNOTATIONS = {
   readOnlyHint: true,
@@ -37,7 +39,7 @@ const READ_ONLY_ANNOTATIONS = {
 function toTitle(name: string): string {
   return name
     .split('_')
-    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
 }
 
@@ -65,9 +67,15 @@ export const TOOLS: Tool[] = [
       type: 'object' as const,
       properties: {
         query: { type: 'string', description: 'Search terms (Dutch or English)' },
-        document_id: { type: 'string', description: 'BWB-ID to restrict search to a specific statute (e.g. "BWBR0005289")' },
+        document_id: {
+          type: 'string',
+          description: 'BWB-ID to restrict search to a specific statute (e.g. "BWBR0005289")',
+        },
         status: { type: 'string', description: 'Filter by status: in_force, repealed, amended' },
-        as_of_date: { type: 'string', description: 'ISO date to query historical versions (e.g. "2020-01-01")' },
+        as_of_date: {
+          type: 'string',
+          description: 'ISO date to query historical versions (e.g. "2020-01-01")',
+        },
         limit: { type: 'number', description: 'Max results (1-50, default 10)' },
       },
       required: ['query'],
@@ -80,10 +88,16 @@ export const TOOLS: Tool[] = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        document_id: { type: 'string', description: 'BWB-ID of the statute (e.g. "BWBR0005289" for BW Boek 6)' },
+        document_id: {
+          type: 'string',
+          description: 'BWB-ID of the statute (e.g. "BWBR0005289" for BW Boek 6)',
+        },
         book: { type: 'string', description: 'Book number if applicable (e.g. "6" for BW Boek 6)' },
         article: { type: 'string', description: 'Article number (e.g. "162")' },
-        provision_ref: { type: 'string', description: 'Full provision reference (e.g. "6:162" or "287")' },
+        provision_ref: {
+          type: 'string',
+          description: 'Full provision reference (e.g. "6:162" or "287")',
+        },
         as_of_date: { type: 'string', description: 'ISO date to retrieve historical version' },
       },
       required: ['document_id'],
@@ -97,10 +111,20 @@ export const TOOLS: Tool[] = [
       type: 'object' as const,
       properties: {
         query: { type: 'string', description: 'Search terms' },
-        court: { type: 'string', description: 'Court code: HR (Hoge Raad), RVS (Raad van State), RBAMS (Rechtbank Amsterdam), etc.' },
+        court: {
+          type: 'string',
+          description:
+            'Court code: HR (Hoge Raad), RVS (Raad van State), RBAMS (Rechtbank Amsterdam), etc.',
+        },
         ecli: { type: 'string', description: 'Direct ECLI lookup (e.g. "ECLI:NL:HR:2019:376")' },
-        legal_domain: { type: 'string', description: 'Legal domain filter (e.g. "civiel", "straf", "bestuursrecht")' },
-        procedure_type: { type: 'string', description: 'Procedure type filter (e.g. "cassatie", "hoger beroep")' },
+        legal_domain: {
+          type: 'string',
+          description: 'Legal domain filter (e.g. "civiel", "straf", "bestuursrecht")',
+        },
+        procedure_type: {
+          type: 'string',
+          description: 'Procedure type filter (e.g. "cassatie", "hoger beroep")',
+        },
         date_from: { type: 'string', description: 'Start date filter (ISO format)' },
         date_to: { type: 'string', description: 'End date filter (ISO format)' },
         limit: { type: 'number', description: 'Max results (1-50, default 10)' },
@@ -116,7 +140,10 @@ export const TOOLS: Tool[] = [
       type: 'object' as const,
       properties: {
         statute_id: { type: 'string', description: 'BWB-ID of the statute (e.g. "BWBR0005289")' },
-        document_type: { type: 'string', description: 'Filter by type: MvT, MvA, amendement, nota, etc.' },
+        document_type: {
+          type: 'string',
+          description: 'Filter by type: MvT, MvA, amendement, nota, etc.',
+        },
         limit: { type: 'number', description: 'Max results (1-50, default 20)' },
       },
       required: ['statute_id'],
@@ -157,7 +184,11 @@ export const TOOLS: Tool[] = [
       type: 'object' as const,
       properties: {
         citation: { type: 'string', description: 'Citation string to format' },
-        format: { type: 'string', description: 'Output format: full, short, or pinpoint', enum: ['full', 'short', 'pinpoint'] },
+        format: {
+          type: 'string',
+          description: 'Output format: full, short, or pinpoint',
+          enum: ['full', 'short', 'pinpoint'],
+        },
       },
       required: ['citation'],
     },
@@ -170,8 +201,14 @@ export const TOOLS: Tool[] = [
       type: 'object' as const,
       properties: {
         document_id: { type: 'string', description: 'BWB-ID of the statute to check' },
-        provision_ref: { type: 'string', description: 'Provision reference to check (e.g. "6:162")' },
-        as_of_date: { type: 'string', description: 'ISO date to check validity at a specific point in time' },
+        provision_ref: {
+          type: 'string',
+          description: 'Provision reference to check (e.g. "6:162")',
+        },
+        as_of_date: {
+          type: 'string',
+          description: 'ISO date to check validity at a specific point in time',
+        },
       },
       required: ['document_id'],
     },
@@ -183,8 +220,14 @@ export const TOOLS: Tool[] = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        document_id: { type: 'string', description: 'BWB-ID of the Dutch statute (e.g. "BWBR0005289")' },
-        include_articles: { type: 'boolean', description: 'Include referenced EU articles (default false)' },
+        document_id: {
+          type: 'string',
+          description: 'BWB-ID of the Dutch statute (e.g. "BWBR0005289")',
+        },
+        include_articles: {
+          type: 'boolean',
+          description: 'Include referenced EU articles (default false)',
+        },
         reference_types: {
           type: 'array',
           items: { type: 'string' },
@@ -201,9 +244,18 @@ export const TOOLS: Tool[] = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        eu_document_id: { type: 'string', description: 'EU document ID to look up implementations for' },
-        primary_only: { type: 'boolean', description: 'Only return primary implementations (default false)' },
-        in_force_only: { type: 'boolean', description: 'Only return statutes that are currently in force (default false)' },
+        eu_document_id: {
+          type: 'string',
+          description: 'EU document ID to look up implementations for',
+        },
+        primary_only: {
+          type: 'boolean',
+          description: 'Only return primary implementations (default false)',
+        },
+        in_force_only: {
+          type: 'boolean',
+          description: 'Only return statutes that are currently in force (default false)',
+        },
       },
       required: ['eu_document_id'],
     },
@@ -216,11 +268,22 @@ export const TOOLS: Tool[] = [
       type: 'object' as const,
       properties: {
         query: { type: 'string', description: 'Search terms for EU document titles' },
-        type: { type: 'string', description: 'Filter by type: directive or regulation', enum: ['directive', 'regulation'] },
+        type: {
+          type: 'string',
+          description: 'Filter by type: directive or regulation',
+          enum: ['directive', 'regulation'],
+        },
         year_from: { type: 'number', description: 'Start year filter' },
         year_to: { type: 'number', description: 'End year filter' },
-        community: { type: 'string', description: 'EU community: EU, EG, EEG, Euratom', enum: ['EU', 'EG', 'EEG', 'Euratom'] },
-        has_dutch_implementation: { type: 'boolean', description: 'Filter by whether a Dutch implementation exists' },
+        community: {
+          type: 'string',
+          description: 'EU community: EU, EG, EEG, Euratom',
+          enum: ['EU', 'EG', 'EEG', 'Euratom'],
+        },
+        has_dutch_implementation: {
+          type: 'boolean',
+          description: 'Filter by whether a Dutch implementation exists',
+        },
         limit: { type: 'number', description: 'Max results (1-100, default 20)' },
       },
       required: [],
@@ -234,7 +297,10 @@ export const TOOLS: Tool[] = [
       type: 'object' as const,
       properties: {
         document_id: { type: 'string', description: 'BWB-ID of the Dutch statute' },
-        provision_ref: { type: 'string', description: 'Provision reference (e.g. "6:162" or "287")' },
+        provision_ref: {
+          type: 'string',
+          description: 'Provision reference (e.g. "6:162" or "287")',
+        },
       },
       required: ['document_id', 'provision_ref'],
     },
@@ -248,7 +314,10 @@ export const TOOLS: Tool[] = [
       properties: {
         document_id: { type: 'string', description: 'BWB-ID of the Dutch statute to validate' },
         provision_ref: { type: 'string', description: 'Provision reference to narrow the check' },
-        eu_document_id: { type: 'string', description: 'EU document ID to check compliance against' },
+        eu_document_id: {
+          type: 'string',
+          description: 'EU document ID to check compliance against',
+        },
       },
       required: ['document_id'],
     },
@@ -261,9 +330,15 @@ export const TOOLS: Tool[] = [
       type: 'object' as const,
       properties: {
         document_id: { type: 'string', description: 'BWB-ID of the statute (e.g. "BWBR0005289")' },
-        provision_ref: { type: 'string', description: 'Provision reference (e.g. "6:162" or "287")' },
+        provision_ref: {
+          type: 'string',
+          description: 'Provision reference (e.g. "6:162" or "287")',
+        },
         date: { type: 'string', description: 'ISO date to query the provision at (YYYY-MM-DD)' },
-        include_amendments: { type: 'boolean', description: 'Include amendment history records (default false)' },
+        include_amendments: {
+          type: 'boolean',
+          description: 'Include amendment history records (default false)',
+        },
       },
       required: ['document_id', 'provision_ref', 'date'],
     },
@@ -282,10 +357,7 @@ export const TOOLS: Tool[] = [
  *                actually needs it (allows the HTTP server to open the db
  *                once and share it across requests).
  */
-export function registerTools(
-  server: Server,
-  getDb: () => InstanceType<typeof Database>,
-): void {
+export function registerTools(server: Server, getDb: () => InstanceType<typeof Database>): void {
   const toolsWithAnnotations = annotateTools(TOOLS);
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -327,16 +399,25 @@ export function registerTools(
           result = await getEUBasis(getDb(), args as unknown as GetEUBasisInput);
           break;
         case 'get_dutch_implementations':
-          result = await getDutchImplementations(getDb(), args as unknown as GetDutchImplementationsInput);
+          result = await getDutchImplementations(
+            getDb(),
+            args as unknown as GetDutchImplementationsInput,
+          );
           break;
         case 'search_eu_implementations':
-          result = await searchEUImplementations(getDb(), args as unknown as SearchEUImplementationsInput);
+          result = await searchEUImplementations(
+            getDb(),
+            args as unknown as SearchEUImplementationsInput,
+          );
           break;
         case 'get_provision_eu_basis':
           result = await getProvisionEUBasis(getDb(), args as unknown as GetProvisionEUBasisInput);
           break;
         case 'validate_eu_compliance':
-          result = await validateEUCompliance(getDb(), args as unknown as ValidateEUComplianceInput);
+          result = await validateEUCompliance(
+            getDb(),
+            args as unknown as ValidateEUComplianceInput,
+          );
           break;
         case 'get_provision_at_date':
           result = await getProvisionAtDate(getDb(), args as unknown as GetProvisionAtDateInput);

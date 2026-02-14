@@ -17,7 +17,7 @@ export default tseslint.config(
       ecmaVersion: 2022,
       sourceType: 'module',
       parserOptions: {
-        project: './tsconfig.json',
+        project: './tsconfig.eslint.json',
         tsconfigRootDir: import.meta.dirname,
       },
     },
@@ -49,6 +49,14 @@ export default tseslint.config(
           fixStyle: 'separate-type-imports',
         },
       ],
+    },
+  },
+
+  // Tool handlers: async by convention (MCP registry requires it) but use sync better-sqlite3
+  {
+    files: ['src/tools/**/*.ts'],
+    rules: {
+      '@typescript-eslint/require-await': 'off',
     },
   },
 
