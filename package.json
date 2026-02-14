@@ -5,17 +5,20 @@
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "dutch-law-mcp": "dist/index.js"
+    "dutch-law-mcp": "dist/index.js",
+    "dutch-law-mcp-http": "dist/http-server.js"
   },
   "files": [
-    "dist",
-    "data/database.db"
+    "dist"
   ],
   "scripts": {
     "build": "tsc",
     "build:db": "tsx scripts/build-db.ts",
     "dev": "tsx src/index.ts",
+    "dev:http": "tsx src/http-server.ts",
     "start": "node dist/index.js",
+    "start:http": "node dist/http-server.js",
+    "prepare-release": "node scripts/prepare-release.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

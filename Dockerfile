@@ -38,6 +38,9 @@ LABEL org.opencontainers.image.documentation="https://github.com/Ansvar-Systems/
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 LABEL org.opencontainers.image.version="1.0.0"
 
+# Install curl for HTTP health checks
+RUN apk add --no-cache curl
+
 # Create non-root user for security
 RUN addgroup -g 1001 -S mcpserver && \
     adduser -u 1001 -S mcpserver -G mcpserver
@@ -49,6 +52,11 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV DUTCH_LAW_DB_PATH=/app/data/database.db
 
+# MODE controls the entry point: "stdio" (default) or "http"
+ENV MODE=stdio
+# PORT is only used when MODE=http
+ENV PORT=3000
+
 # Copy dependency manifests
 COPY package*.json ./
 
@@ -59,7 +67,7 @@ RUN npm ci --omit=dev && \
 # Copy built artifacts from builder stage
 COPY --from=builder /build/dist ./dist
 
-# Copy database (225MB SQLite file)
+# Copy database (baked in at build time — NOT downloaded at runtime)
 COPY data/database.db ./data/database.db
 
 # Change ownership to non-root user
@@ -68,9 +76,12 @@ RUN chown -R mcpserver:mcpserver /app
 # Switch to non-root user
 USER mcpserver
 
-# Health check (MCP servers communicate over stdio, so we check if the binary exists)
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD node -e "require('fs').accessSync('dist/index.js')" || exit 1
+# Expose HTTP port (only relevant when MODE=http)
+EXPOSE 3000
 
-# Entry point (MCP server communicates over stdio)
-ENTRYPOINT ["node", "dist/index.js"]
+# Health check: use HTTP endpoint in HTTP mode, file check in stdio mode
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD if [ "$MODE" = "http" ]; then curl -f http://localhost:${PORT}/health || exit 1; else node -e "require('fs').accessSync('dist/index.js')" || exit 1; fi
+
+# Entry point: select mode via shell
+ENTRYPOINT ["sh", "-c", "if [ \"$MODE\" = \"http\" ]; then exec node dist/http-server.js; else exec node dist/index.js; fi"]

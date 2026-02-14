@@ -8,6 +8,8 @@ Production-grade [Model Context Protocol](https://modelcontextprotocol.io/) serv
 npm install @ansvar/dutch-law-mcp
 ```
 
+On first run, the ~1 GB SQLite database is automatically downloaded from GitHub Releases and cached at `~/.cache/dutch-law-mcp/database.db`. Subsequent runs use the cached copy.
+
 ### Claude Desktop Configuration
 
 Add to your Claude Desktop configuration file (`claude_desktop_config.json`):
@@ -23,7 +25,7 @@ Add to your Claude Desktop configuration file (`claude_desktop_config.json`):
 }
 ```
 
-Or with a custom database path:
+Or with a custom database path (skips download):
 
 ```json
 {
@@ -37,6 +39,36 @@ Or with a custom database path:
     }
   }
 }
+```
+
+### HTTP Endpoint (ChatGPT, Claude browser, remote clients)
+
+For clients that connect over HTTP instead of stdio:
+
+```bash
+npx @ansvar/dutch-law-mcp-http
+```
+
+Or run directly:
+
+```bash
+npm run start:http
+```
+
+The HTTP server exposes:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check (`{ "status": "healthy" }`) |
+| `/mcp` | GET | Server metadata JSON |
+| `/mcp` | POST | MCP protocol (Streamable HTTP transport) |
+| `/mcp` | DELETE | Session termination |
+
+Configure with environment variables:
+
+```bash
+PORT=3000      # HTTP port (default: 3000)
+HOST=0.0.0.0   # Bind address (default: 0.0.0.0)
 ```
 
 ## Available Tools
@@ -145,12 +177,17 @@ npm run import:eurlex-documents  # Import EU law references into database
 
 ```
 src/
-  index.ts              # MCP server entry point
-  tools/                # 14 MCP tool implementations
+  index.ts              # MCP server entry point (stdio)
+  http-server.ts        # HTTP server entry point (Streamable HTTP)
+  tools/
+    registry.ts         # Shared tool definitions and handler registration
+    ...                 # 14 MCP tool implementations
   parsers/              # BWB XML parser, EU reference parser, amendment parser, cross-ref extractor
   citation/             # Citation parsing and formatting
   types/                # TypeScript type definitions
-  utils/                # Shared utilities
+  utils/
+    ensure-database.ts  # Download-on-first-run database management
+    ...                 # Other shared utilities
 scripts/                # Ingestion and build scripts
 tests/                  # Vitest test suites
 docs/                   # EU integration guide, coverage limitations
@@ -161,11 +198,23 @@ data/
 
 ## Docker
 
-### Build and run
+### Build and run (stdio mode, default)
 
 ```bash
 docker build -t dutch-law-mcp .
 docker run --rm -i dutch-law-mcp
+```
+
+### HTTP mode
+
+```bash
+docker run --rm -e MODE=http -p 3000:3000 dutch-law-mcp
+```
+
+Verify with:
+
+```bash
+curl http://localhost:3000/health
 ```
 
 ### Docker Compose
@@ -174,7 +223,49 @@ docker run --rm -i dutch-law-mcp
 docker compose up -d
 ```
 
-The Docker image uses a multi-stage build with a non-root user for security. The database is mounted as a read-only volume.
+The Docker image uses a multi-stage build with a non-root user for security. The database is baked into the image at build time.
+
+## Deployment
+
+### Railway
+
+```bash
+railway init
+railway up
+```
+
+Set environment variables:
+- `MODE=http`
+- `PORT` is set automatically by Railway
+
+### Fly.io
+
+```bash
+fly launch
+fly deploy
+```
+
+In `fly.toml`:
+```toml
+[env]
+  MODE = "http"
+
+[[services]]
+  internal_port = 3000
+```
+
+## Releasing
+
+To prepare a new release with the database artifact:
+
+```bash
+npm run prepare-release   # Creates data/database.db.gz
+gh release create v1.0.0
+gh release upload v1.0.0 data/database.db.gz
+npm publish
+```
+
+The gzipped database is uploaded to GitHub Releases. When users install via `npx`, the database is automatically downloaded and cached on first run.
 
 ## License
 
