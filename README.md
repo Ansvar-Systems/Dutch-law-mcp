@@ -261,6 +261,26 @@ In `fly.toml`:
   internal_port = 3000
 ```
 
+### Vercel (Serverless)
+
+Deploy as a serverless function — no long-running server needed:
+
+```bash
+npm i -g vercel    # Install Vercel CLI (once)
+vercel deploy      # Deploy to preview
+vercel --prod      # Deploy to production
+```
+
+The serverless handler at `api/mcp.ts` downloads the ~1 GB SQLite database from GitHub Releases on cold start, decompresses it to `/tmp`, and caches it across warm invocations. The WASM-based SQLite driver (`node-sqlite3-wasm`) works on Vercel without native compilation.
+
+**Note:** Requires Vercel Pro plan (1 GB `/tmp` storage) and `maxDuration >= 60` for cold-start downloads. Override the download URL with `DUTCH_LAW_DB_URL` if needed.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check (`{ "status": "ok" }`) |
+| `/mcp` | GET | Server metadata JSON |
+| `/mcp` | POST | MCP protocol (stateless Streamable HTTP) |
+
 ## Releasing
 
 To prepare a new release with the database artifact:
@@ -273,6 +293,31 @@ npm publish
 ```
 
 The gzipped database is uploaded to GitHub Releases. When users install via `npx`, the database is automatically downloaded and cached on first run.
+
+## Directory Review Notes
+
+### Testing Account and Sample Data
+
+This server is read-only and does not require a login account for functional review.
+For directory review, use the bundled dataset and these sample prompts:
+- *"Search Dutch legislation for persoonsgegevens verwerking"*
+- *"Get BWBR0005289 provision 6:162"*
+- *"Which Dutch statutes implement GDPR?"*
+
+### Remote Authentication (OAuth 2.0)
+
+When deployed over Streamable HTTP, this server can run in read-only unauthenticated mode.
+If authentication is required in your deployment, configure OAuth 2.0 over TLS with certificates from recognized authorities.
+
+### Privacy
+
+See [PRIVACY.md](PRIVACY.md) for data handling, retention, and security disclosures.
+
+### Troubleshooting
+
+- If startup fails, confirm the database path via `DUTCH_LAW_DB_PATH`.
+- If HTTP clients fail, verify `/mcp` POST routing and session headers.
+- If results are empty, call `list_regulations` first to confirm dataset load.
 
 ## License
 

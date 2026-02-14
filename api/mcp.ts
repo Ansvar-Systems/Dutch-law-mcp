@@ -83,45 +83,44 @@ async function resolveDownloadUrl(): Promise<{
     return { url: process.env.DUTCH_LAW_DB_URL, headers: {} };
   }
 
-  // Use GitHub API to get the asset download URL (works for private repos)
+  // For public repos, use the direct download URL (no auth needed)
+  const directUrl = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/download/${GITHUB_TAG}/${ASSET_NAME}`;
   const token = process.env.GITHUB_TOKEN;
-  if (!token) {
-    throw new Error(
-      'GITHUB_TOKEN is required to download the database from a private GitHub repo. ' +
-        'Set it as a Vercel environment variable, or set DUTCH_LAW_DB_URL to a public download URL.',
-    );
-  }
 
-  // Step 1: Find the asset ID for database.db.gz in the release
-  const apiUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/tags/${GITHUB_TAG}`;
-  const authHeaders = {
-    Authorization: `token ${token}`,
-    Accept: 'application/vnd.github.v3+json',
-  };
-
-  const releaseRes = await followRedirects(apiUrl, authHeaders);
-  const chunks: Buffer[] = [];
-  for await (const chunk of releaseRes) {
-    chunks.push(chunk as Buffer);
-  }
-  const release = JSON.parse(Buffer.concat(chunks).toString('utf-8'));
-  const asset = release.assets?.find(
-    (a: { name: string }) => a.name === ASSET_NAME,
-  );
-  if (!asset) {
-    throw new Error(
-      `Asset "${ASSET_NAME}" not found in release ${GITHUB_TAG}`,
-    );
-  }
-
-  // Step 2: Return the API asset URL with octet-stream accept header
-  return {
-    url: asset.url as string,
-    headers: {
+  if (token) {
+    // If a token is available, use the API for private repo support
+    const apiUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/tags/${GITHUB_TAG}`;
+    const authHeaders = {
       Authorization: `token ${token}`,
-      Accept: 'application/octet-stream',
-    },
-  };
+      Accept: 'application/vnd.github.v3+json',
+    };
+
+    const releaseRes = await followRedirects(apiUrl, authHeaders);
+    const chunks: Buffer[] = [];
+    for await (const chunk of releaseRes) {
+      chunks.push(chunk as Buffer);
+    }
+    const release = JSON.parse(Buffer.concat(chunks).toString('utf-8'));
+    const asset = release.assets?.find(
+      (a: { name: string }) => a.name === ASSET_NAME,
+    );
+    if (!asset) {
+      throw new Error(
+        `Asset "${ASSET_NAME}" not found in release ${GITHUB_TAG}`,
+      );
+    }
+
+    return {
+      url: asset.url as string,
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: 'application/octet-stream',
+      },
+    };
+  }
+
+  // No token — use direct public download URL
+  return { url: directUrl, headers: {} };
 }
 
 async function downloadDatabase(): Promise<void> {

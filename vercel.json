@@ -1,4 +1,7 @@
 {
+  "crons": [
+    { "path": "/health", "schedule": "*/5 * * * *" }
+  ],
   "buildCommand": "npm run build",
   "outputDirectory": ".",
   "functions": {
