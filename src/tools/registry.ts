@@ -28,6 +28,30 @@ import { getProvisionEUBasis, type GetProvisionEUBasisInput } from './get-provis
 import { validateEUCompliance, type ValidateEUComplianceInput } from './validate-eu-compliance.js';
 import { getProvisionAtDate, type GetProvisionAtDateInput } from './get-provision-at-date.js';
 
+
+const READ_ONLY_ANNOTATIONS = {
+  readOnlyHint: true,
+  destructiveHint: false,
+} as const;
+
+function toTitle(name: string): string {
+  return name
+    .split('_')
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function annotateTools(tools: Tool[]): Tool[] {
+  return tools.map((tool) => ({
+    ...tool,
+    annotations: {
+      title: tool.annotations?.title ?? toTitle(tool.name),
+      readOnlyHint: tool.annotations?.readOnlyHint ?? READ_ONLY_ANNOTATIONS.readOnlyHint,
+      destructiveHint: tool.annotations?.destructiveHint ?? READ_ONLY_ANNOTATIONS.destructiveHint,
+    },
+  }));
+}
+
 // ---------------------------------------------------------------------------
 // Tool definitions
 // ---------------------------------------------------------------------------
@@ -262,64 +286,77 @@ export function registerTools(
   server: Server,
   getDb: () => InstanceType<typeof Database>,
 ): void {
+  const toolsWithAnnotations = annotateTools(TOOLS);
+
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: TOOLS,
+    tools: toolsWithAnnotations,
   }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
-    let result: unknown;
+    try {
+      let result: unknown;
 
-    switch (name) {
-      case 'search_legislation':
-        result = await searchLegislation(getDb(), args as unknown as SearchLegislationInput);
-        break;
-      case 'get_provision':
-        result = await getProvision(getDb(), args as unknown as GetProvisionInput);
-        break;
-      case 'search_case_law':
-        result = await searchCaseLaw(getDb(), args as unknown as SearchCaseLawInput);
-        break;
-      case 'get_preparatory_works':
-        result = await getPreparatoryWorks(getDb(), args as unknown as GetPreparatoryWorksInput);
-        break;
-      case 'validate_citation':
-        result = await validateCitationTool(getDb(), args as unknown as ValidateCitationInput);
-        break;
-      case 'build_legal_stance':
-        result = await buildLegalStance(getDb(), args as unknown as BuildLegalStanceInput);
-        break;
-      case 'format_citation':
-        result = await formatCitationTool(args as unknown as FormatCitationInput);
-        break;
-      case 'check_currency':
-        result = await checkCurrency(getDb(), args as unknown as CheckCurrencyInput);
-        break;
-      case 'get_eu_basis':
-        result = await getEUBasis(getDb(), args as unknown as GetEUBasisInput);
-        break;
-      case 'get_dutch_implementations':
-        result = await getDutchImplementations(getDb(), args as unknown as GetDutchImplementationsInput);
-        break;
-      case 'search_eu_implementations':
-        result = await searchEUImplementations(getDb(), args as unknown as SearchEUImplementationsInput);
-        break;
-      case 'get_provision_eu_basis':
-        result = await getProvisionEUBasis(getDb(), args as unknown as GetProvisionEUBasisInput);
-        break;
-      case 'validate_eu_compliance':
-        result = await validateEUCompliance(getDb(), args as unknown as ValidateEUComplianceInput);
-        break;
-      case 'get_provision_at_date':
-        result = await getProvisionAtDate(getDb(), args as unknown as GetProvisionAtDateInput);
-        break;
-      default:
-        throw new Error(`Unknown tool: ${name}`);
+      switch (name) {
+        case 'search_legislation':
+          result = await searchLegislation(getDb(), args as unknown as SearchLegislationInput);
+          break;
+        case 'get_provision':
+          result = await getProvision(getDb(), args as unknown as GetProvisionInput);
+          break;
+        case 'search_case_law':
+          result = await searchCaseLaw(getDb(), args as unknown as SearchCaseLawInput);
+          break;
+        case 'get_preparatory_works':
+          result = await getPreparatoryWorks(getDb(), args as unknown as GetPreparatoryWorksInput);
+          break;
+        case 'validate_citation':
+          result = await validateCitationTool(getDb(), args as unknown as ValidateCitationInput);
+          break;
+        case 'build_legal_stance':
+          result = await buildLegalStance(getDb(), args as unknown as BuildLegalStanceInput);
+          break;
+        case 'format_citation':
+          result = await formatCitationTool(args as unknown as FormatCitationInput);
+          break;
+        case 'check_currency':
+          result = await checkCurrency(getDb(), args as unknown as CheckCurrencyInput);
+          break;
+        case 'get_eu_basis':
+          result = await getEUBasis(getDb(), args as unknown as GetEUBasisInput);
+          break;
+        case 'get_dutch_implementations':
+          result = await getDutchImplementations(getDb(), args as unknown as GetDutchImplementationsInput);
+          break;
+        case 'search_eu_implementations':
+          result = await searchEUImplementations(getDb(), args as unknown as SearchEUImplementationsInput);
+          break;
+        case 'get_provision_eu_basis':
+          result = await getProvisionEUBasis(getDb(), args as unknown as GetProvisionEUBasisInput);
+          break;
+        case 'validate_eu_compliance':
+          result = await validateEUCompliance(getDb(), args as unknown as ValidateEUComplianceInput);
+          break;
+        case 'get_provision_at_date':
+          result = await getProvisionAtDate(getDb(), args as unknown as GetProvisionAtDateInput);
+          break;
+        default:
+          return {
+            content: [{ type: 'text', text: `Error: Unknown tool "${name}".` }],
+            isError: true,
+          };
+      }
+
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        content: [{ type: 'text', text: `Error executing ${name}: ${message}` }],
+        isError: true,
+      };
     }
-
-    return {
-      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-    };
   });
 }
