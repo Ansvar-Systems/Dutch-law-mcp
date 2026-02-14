@@ -14,6 +14,7 @@
   "scripts": {
     "build": "tsc",
     "build:db": "tsx scripts/build-db.ts",
+    "build:db:paid": "tsx scripts/build-db-paid.ts",
     "dev": "tsx src/index.ts",
     "dev:http": "tsx src/http-server.ts",
     "start": "node dist/index.js",
@@ -48,6 +49,7 @@
   "devDependencies": {
     "@eslint/js": "^9.27.0",
     "@types/node": "^22.15.29",
+    "@vercel/node": "^5.6.3",
     "eslint": "^9.27.0",
     "fast-xml-parser": "^5.3.5",
     "husky": "^9.1.7",
@@ -70,9 +72,18 @@
   },
   "homepage": "https://github.com/Ansvar-Systems/Dutch-law-mcp#readme",
   "keywords": [
-    "mcp", "model-context-protocol", "ai", "claude",
-    "dutch-law", "netherlands", "legal", "compliance",
-    "wetten", "bwb", "rechtspraak", "ansvar"
+    "mcp",
+    "model-context-protocol",
+    "ai",
+    "claude",
+    "dutch-law",
+    "netherlands",
+    "legal",
+    "compliance",
+    "wetten",
+    "bwb",
+    "rechtspraak",
+    "ansvar"
   ],
   "author": "Ansvar Systems AB <hello@ansvar.ai>",
   "license": "Apache-2.0"

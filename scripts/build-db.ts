@@ -269,6 +269,12 @@ CREATE TABLE IF NOT EXISTS eu_references (
 CREATE INDEX IF NOT EXISTS idx_eu_references_document ON eu_references(document_id, eu_document_id);
 CREATE INDEX IF NOT EXISTS idx_eu_references_eu_document ON eu_references(eu_document_id, document_id);
 CREATE INDEX IF NOT EXISTS idx_eu_references_provision ON eu_references(provision_id, eu_document_id);
+
+-- Database metadata (tier, version, build info)
+CREATE TABLE IF NOT EXISTS db_metadata (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 `;
 
 // ---------------------------------------------------------------------------
@@ -741,12 +747,27 @@ function main(): void {
 
   insertAll();
 
-  // 6. Run ANALYZE for query planner optimization
+  // 6. Write db_metadata (free tier)
+  console.log();
+  console.log('Writing db_metadata...');
+  const upsertMeta = db.prepare(`
+    INSERT INTO db_metadata (key, value) VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `);
+  const writeMeta = db.transaction(() => {
+    upsertMeta.run('tier', 'free');
+    upsertMeta.run('schema_version', '1');
+    upsertMeta.run('built_at', new Date().toISOString());
+    upsertMeta.run('builder', 'build-db.ts');
+  });
+  writeMeta();
+
+  // 7. Run ANALYZE for query planner optimization
   console.log();
   console.log('Running ANALYZE...');
   db.exec('ANALYZE');
 
-  // 7. Close
+  // 8. Close
   db.close();
   console.log();
   console.log(`Database built successfully at ${DB_PATH}`);

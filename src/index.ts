@@ -12,6 +12,7 @@ import { fileURLToPath } from 'url';
 
 import { registerTools } from './tools/registry.js';
 import { ensureDatabase } from './utils/ensure-database.js';
+import { detectCapabilities, readDbMetadata, type Capability, type DbMetadata } from './capabilities.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -34,6 +35,8 @@ function getDefaultDbPath(): string {
 }
 
 let dbInstance: InstanceType<typeof Database> | null = null;
+let dbCapabilities: Set<Capability> | null = null;
+let dbMetadata: DbMetadata | null = null;
 
 export function openDb(dbPath: string): InstanceType<typeof Database> {
   const db = new Database(dbPath, { readonly: true });
@@ -45,8 +48,23 @@ function getDb(): InstanceType<typeof Database> {
   if (!dbInstance) {
     const dbPath = process.env[DB_ENV_VAR] ?? getDefaultDbPath();
     dbInstance = openDb(dbPath);
+
+    // Detect capabilities on first open
+    dbCapabilities = detectCapabilities(dbInstance);
+    dbMetadata = readDbMetadata(dbInstance);
+    console.error(`[${SERVER_NAME}] Database tier: ${dbMetadata.tier}, capabilities: ${[...dbCapabilities].join(', ')}`);
   }
   return dbInstance;
+}
+
+export function getCapabilities(): Set<Capability> {
+  if (!dbCapabilities) getDb();
+  return dbCapabilities!;
+}
+
+export function getMetadata(): DbMetadata {
+  if (!dbMetadata) getDb();
+  return dbMetadata!;
 }
 
 function closeDb(): void {
