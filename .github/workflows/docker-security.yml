@@ -27,6 +27,9 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Create placeholder database for CI build
+        run: mkdir -p data && touch data/database.db
+
       - name: Build Docker image for scanning
         uses: docker/build-push-action@v5
         with:
@@ -96,6 +99,9 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Create placeholder database for CI build
+        run: mkdir -p data && touch data/database.db
 
       - name: Build image for SBOM
         uses: docker/build-push-action@v5

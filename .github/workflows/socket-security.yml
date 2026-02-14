@@ -33,4 +33,4 @@ jobs:
       - name: Run Socket Security
         uses: SocketDev/action@v1
         with:
-          issue-severity: high
+          mode: diff
