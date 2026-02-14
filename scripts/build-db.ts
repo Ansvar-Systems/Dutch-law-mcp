@@ -607,11 +607,13 @@ function main(): void {
         }
       }
 
-      // Provision versions
-      if (seed.provision_versions) {
-        for (const ver of seed.provision_versions) {
+      // Provision versions — use explicit versions if available,
+      // otherwise copy current provisions as a single "current" version
+      const versionSource = seed.provision_versions ?? seed.provisions;
+      if (versionSource) {
+        for (const ver of versionSource) {
           insertProvVer.run({
-            document_id: ver.document_id,
+            document_id: ver.document_id ?? seed.documents?.[0]?.id,
             provision_ref: ver.provision_ref,
             book: ver.book ?? null,
             chapter: ver.chapter ?? null,
@@ -648,6 +650,23 @@ function main(): void {
       // Preparatory works
       if (seed.preparatory_works) {
         for (const pw of seed.preparatory_works) {
+          // Auto-create placeholder document for missing statute references
+          if (pw.statute_id && !insertedDocIds.has(pw.statute_id)) {
+            insertDoc.run({
+              id: pw.statute_id,
+              type: 'statute',
+              title: pw.statute_id,
+              title_en: null,
+              short_name: null,
+              status: 'in_force',
+              issued_date: null,
+              in_force_date: null,
+              url: `https://wetten.overheid.nl/${pw.statute_id}`,
+              description: null,
+            });
+            insertedDocIds.add(pw.statute_id);
+            docCount++;
+          }
           insertPrep.run({
             statute_id: pw.statute_id,
             prep_document_id: pw.prep_document_id,

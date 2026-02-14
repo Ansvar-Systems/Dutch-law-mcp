@@ -26,12 +26,24 @@ const SEED_DIR = path.resolve(__dirname, '..', 'data', 'seed');
 // Configuration
 // ---------------------------------------------------------------------------
 
-const SRU_BASE = 'https://zoekservice.overheid.nl/sru/Search';
-const SRU_QUERY = 'dcterms.type=Kamerstuk';
-const SRU_PAGE_SIZE = 100;
+const SRU_BASE = 'https://zoek.officielebekendmakingen.nl/sru/Search';
+const SRU_PAGE_SIZE = 50; // max 50 to avoid server-side XQuery errors
 
 const RATE_LIMIT_MS = 500;
-const MAX_BATCHES = 50; // Limit to prevent runaway ingestion
+const MAX_RETRIES = 3;
+const MAX_BATCHES = 500; // ~25,000 kamerstukken max
+
+// Target only legislative document types that link to statutes.
+// Moties/brieven/amendementen rarely contain BWB-IDs (~334K total, mostly noise).
+// These ~10K documents are the actual travaux préparatoires.
+const SRU_QUERIES = [
+  { label: 'Voorstel van wet', query: 'type=Kamerstuk AND subrubriek="Voorstel van wet"' },
+  { label: 'Memorie van toelichting', query: 'type=Kamerstuk AND subrubriek="Memorie van toelichting"' },
+  { label: 'Nota van wijziging', query: 'type=Kamerstuk AND subrubriek="Nota van wijziging"' },
+  { label: 'Nota nav verslag', query: 'type=Kamerstuk AND subrubriek="Nota naar aanleiding van het verslag"' },
+  { label: 'Advies Raad van State', query: 'type=Kamerstuk AND subrubriek="Advies Raad van State en Nader rapport"' },
+  { label: 'Verslag', query: 'type=Kamerstuk AND subrubriek="Verslag"' },
+];
 
 // Document type mapping from metadata to standardized types
 const DOCUMENT_TYPE_MAP: Record<string, string> = {
@@ -45,6 +57,7 @@ const DOCUMENT_TYPE_MAP: Record<string, string> = {
   'brief': 'brief',
   'verslag': 'verslag',
   'eindverslag': 'eindverslag',
+  'motie': 'motie',
 };
 
 // ---------------------------------------------------------------------------
@@ -85,12 +98,30 @@ interface KamerstukRecord {
 }
 
 /**
- * Extract BWB identifiers from metadata fields.
+ * Extract BWB identifiers from text.
  */
 function extractBwbIds(text: string): string[] {
   if (!text) return [];
   const matches = text.match(/BWB[RV]\d+/g);
   return matches ? Array.from(new Set(matches)) : [];
+}
+
+/**
+ * Fetch the actual kamerstuk page and extract BWB references from its content.
+ * Falls back to empty array on error.
+ */
+async function fetchBwbRefsFromDocument(url: string): Promise<string[]> {
+  try {
+    const response = await fetch(url, {
+      headers: { 'Accept': 'text/html' },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) return [];
+    const html = await response.text();
+    return extractBwbIds(html);
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -129,7 +160,7 @@ function parseKamerstukRef(
 /**
  * Fetch a single page from the SRU service and return kamerstuk records.
  */
-async function fetchSRUPage(startRecord: number): Promise<{
+async function fetchSRUPage(sruQuery: string, startRecord: number): Promise<{
   records: KamerstukRecord[];
   totalRecords: number;
   nextRecordPosition: number | null;
@@ -137,8 +168,7 @@ async function fetchSRUPage(startRecord: number): Promise<{
   const url = new URL(SRU_BASE);
   url.searchParams.set('operation', 'searchRetrieve');
   url.searchParams.set('version', '1.2');
-  url.searchParams.set('x-connection', 'ob'); // officielebekendmakingen
-  url.searchParams.set('query', SRU_QUERY);
+  url.searchParams.set('query', sruQuery);
   url.searchParams.set('maximumRecords', String(SRU_PAGE_SIZE));
   url.searchParams.set('startRecord', String(startRecord));
 
@@ -188,7 +218,10 @@ async function fetchSRUPage(startRecord: number): Promise<{
     const originalData = gzd['originalData'] as Record<string, unknown> | undefined;
     if (!originalData) continue;
 
-    const owmsKern = originalData['owmskern'] ?? originalData['owms-kern'] as Record<string, unknown> | undefined;
+    const meta = originalData['meta'] as Record<string, unknown> | undefined;
+    if (!meta) continue;
+
+    const owmsKern = meta['owmskern'] as Record<string, unknown> | undefined;
     if (!owmsKern || typeof owmsKern !== 'object') continue;
 
     // Extract identifier
@@ -202,26 +235,29 @@ async function fetchSRUPage(startRecord: number): Promise<{
     const titleNode = (owmsKern as Record<string, unknown>)['title'];
     const title = extractText(titleNode);
 
-    // Extract date
-    const dateNode = (owmsKern as Record<string, unknown>)['issued'] ?? (owmsKern as Record<string, unknown>)['modified'];
+    // Extract date from owmsmantel (issued) or owmskern (modified)
+    const owmsMantel = meta['owmsmantel'] as Record<string, unknown> | undefined;
+    const dateNode = owmsMantel?.['issued'] ?? (owmsKern as Record<string, unknown>)['modified'];
     const date = extractText(dateNode).substring(0, 10);
 
-    // Extract description/summary
+    // Extract description/summary from owmskern
     const descNode = (owmsKern as Record<string, unknown>)['description'] ?? (owmsKern as Record<string, unknown>)['abstract'];
     const summary = extractText(descNode);
 
-    // Extract dossiernummer and ondernummer from enrichedData or identifier
-    const enrichedData = gzd['enrichedData'] as Record<string, unknown> | undefined;
+    // Extract dossiernummer, ondernummer, and document type from opmeta
+    const opMeta = meta['opmeta'] as Record<string, unknown> | undefined;
     let dossiernummer = '';
     let ondernummer = '';
     let documentType = '';
     let year = '';
 
-    if (enrichedData) {
-      dossiernummer = extractText(enrichedData['dossiernummer'] ?? enrichedData['dossier']);
-      ondernummer = extractText(enrichedData['ondernummer'] ?? enrichedData['nummer']);
-      documentType = normalizeDocumentType(extractText(enrichedData['type'] ?? enrichedData['documentType']));
-      year = extractText(enrichedData['year'] ?? enrichedData['vergaderjaar']);
+    if (opMeta) {
+      dossiernummer = extractText(opMeta['dossiernummer']);
+      ondernummer = extractText(opMeta['ondernummer']);
+      year = extractText(opMeta['vergaderjaar']);
+      // subrubriek or subrubriekParlementair contains document type
+      const subrubriek = extractText(opMeta['subrubriek'] ?? opMeta['subrubriekParlementair']);
+      documentType = normalizeDocumentType(subrubriek);
     }
 
     // Try to extract from identifier if not found
@@ -241,10 +277,13 @@ async function fetchSRUPage(startRecord: number): Promise<{
     const allText = `${summary} ${title} ${extractText((owmsKern as Record<string, unknown>)['subject'])}`;
     const relatedBwbIds = extractBwbIds(allText);
 
-    // Build URL
-    const url = identifier.startsWith('http')
-      ? identifier
-      : `https://zoek.officielebekendmakingen.nl/${identifier.replace(/^.*\//, '')}`;
+    // Build URL from enrichedData or construct from identifier
+    const enrichedData = gzd['enrichedData'] as Record<string, unknown> | undefined;
+    const enrichedUrl = enrichedData?.['url'] as string | undefined;
+    const url = enrichedUrl ||
+      (identifier.startsWith('http')
+        ? identifier
+        : `https://zoek.officielebekendmakingen.nl/${identifier.replace(/^.*\//, '')}.html`);
 
     // Only add if we have minimum required data
     if (dossiernummer && ondernummer && title) {
@@ -328,61 +367,92 @@ async function main(): Promise<void> {
     fs.mkdirSync(SEED_DIR, { recursive: true });
   }
 
-  console.log('Phase 1: Discovering kamerstukken via SRU...');
-
-  let startRecord = 1;
   let batchIndex = 0;
-  let totalRecords = 0;
   let totalKamerstukken = 0;
   let totalLinks = 0;
 
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    // Check if batch already exists
-    if (batchFileExists(batchIndex)) {
-      console.log(`  Batch ${batchIndex} already exists, skipping...`);
-      batchIndex++;
-      startRecord += SRU_PAGE_SIZE;
+  for (const { label, query } of SRU_QUERIES) {
+    console.log(`\nPhase: ${label} (${query})`);
 
-      // Stop if we've checked enough batches
-      if (batchIndex >= MAX_BATCHES) {
-        console.log(`  Reached maximum batch limit (${MAX_BATCHES}), stopping.`);
+    let startRecord = 1;
+    let totalRecords = 0;
+    let consecutiveErrors = 0;
+
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      // Check if batch already exists
+      if (batchFileExists(batchIndex)) {
+        console.log(`  Batch ${batchIndex} already exists, skipping...`);
+        batchIndex++;
+        startRecord += SRU_PAGE_SIZE;
+
+        if (batchIndex >= MAX_BATCHES) {
+          console.log(`  Reached maximum batch limit (${MAX_BATCHES}), stopping.`);
+          break;
+        }
+        continue;
+      }
+
+      // Fetch with retry logic (the API has intermittent XQuery errors at certain offsets)
+      let page: Awaited<ReturnType<typeof fetchSRUPage>> | null = null;
+      for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        try {
+          page = await fetchSRUPage(query, startRecord);
+          if (page.records.length > 0) break;
+        } catch (err) {
+          console.warn(`  WARNING: SRU error at record ${startRecord} (attempt ${attempt + 1}): ${err}`);
+        }
+        await sleep(RATE_LIMIT_MS * 2);
+      }
+
+      if (!page || page.records.length === 0) {
+        consecutiveErrors++;
+        if (consecutiveErrors < 5 && totalRecords > 0 && startRecord < totalRecords) {
+          console.log(`  Skipping offset ${startRecord} (server error), advancing...`);
+          startRecord += SRU_PAGE_SIZE;
+          continue;
+        }
         break;
       }
-      continue;
-    }
 
-    const page = await fetchSRUPage(startRecord);
-    totalRecords = page.totalRecords;
+      consecutiveErrors = 0;
+      totalRecords = page.totalRecords || totalRecords;
 
-    console.log(`  Found ${page.records.length} kamerstukken in this page (${startRecord} / ${totalRecords})`);
+      console.log(`  [${label}] Found ${page.records.length} kamerstukken (${startRecord} / ${totalRecords})`);
 
-    if (page.records.length === 0) {
-      console.log('  No more records found.');
-      break;
-    }
-
-    // Write batch
-    writeKamerstukSeed(page.records, batchIndex);
-    totalKamerstukken += page.records.length;
-
-    // Count BWB links
-    for (const record of page.records) {
-      totalLinks += record.relatedBwbIds.length;
-    }
-
-    batchIndex++;
-
-    // Check if we should continue
-    if (page.nextRecordPosition == null || batchIndex >= MAX_BATCHES) {
-      if (batchIndex >= MAX_BATCHES) {
-        console.log(`  Reached maximum batch limit (${MAX_BATCHES}), stopping.`);
+      // Enrich with BWB references from actual document HTML
+      for (const record of page.records) {
+        if (record.relatedBwbIds.length === 0 && record.url) {
+          const bwbRefs = await fetchBwbRefsFromDocument(record.url);
+          if (bwbRefs.length > 0) {
+            record.relatedBwbIds = bwbRefs;
+          }
+          await sleep(100);
+        }
       }
-      break;
-    }
 
-    startRecord = page.nextRecordPosition;
-    await sleep(RATE_LIMIT_MS);
+      // Write batch
+      writeKamerstukSeed(page.records, batchIndex);
+      totalKamerstukken += page.records.length;
+
+      // Count BWB links
+      for (const record of page.records) {
+        totalLinks += record.relatedBwbIds.length;
+      }
+
+      batchIndex++;
+
+      // Check if we should continue
+      if (page.nextRecordPosition == null || batchIndex >= MAX_BATCHES) {
+        if (batchIndex >= MAX_BATCHES) {
+          console.log(`  Reached maximum batch limit (${MAX_BATCHES}), stopping.`);
+        }
+        break;
+      }
+
+      startRecord = page.nextRecordPosition;
+      await sleep(RATE_LIMIT_MS);
+    }
   }
 
   console.log();

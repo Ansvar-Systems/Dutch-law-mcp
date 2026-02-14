@@ -26,6 +26,7 @@ import { getDutchImplementations, type GetDutchImplementationsInput } from './to
 import { searchEUImplementations, type SearchEUImplementationsInput } from './tools/search-eu-implementations.js';
 import { getProvisionEUBasis, type GetProvisionEUBasisInput } from './tools/get-provision-eu-basis.js';
 import { validateEUCompliance, type ValidateEUComplianceInput } from './tools/validate-eu-compliance.js';
+import { getProvisionAtDate, type GetProvisionAtDateInput } from './tools/get-provision-at-date.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -266,6 +267,21 @@ const TOOLS: Tool[] = [
       required: ['document_id'],
     },
   },
+  {
+    name: 'get_provision_at_date',
+    description:
+      'Retrieve a specific provision from a Dutch statute as it was at a given date. Uses the provision version history to return the text valid at the specified date. Supports amendment tracking.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        document_id: { type: 'string', description: 'BWB-ID of the statute (e.g. "BWBR0005289")' },
+        provision_ref: { type: 'string', description: 'Provision reference (e.g. "6:162" or "287")' },
+        date: { type: 'string', description: 'ISO date to query the provision at (YYYY-MM-DD)' },
+        include_amendments: { type: 'boolean', description: 'Include amendment history records (default false)' },
+      },
+      required: ['document_id', 'provision_ref', 'date'],
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -334,6 +350,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       break;
     case 'validate_eu_compliance':
       result = await validateEUCompliance(getDb(), args as unknown as ValidateEUComplianceInput);
+      break;
+    case 'get_provision_at_date':
+      result = await getProvisionAtDate(getDb(), args as unknown as GetProvisionAtDateInput);
       break;
     default:
       throw new Error(`Unknown tool: ${name}`);

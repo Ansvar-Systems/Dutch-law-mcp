@@ -20,13 +20,21 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "ingest": "tsx scripts/ingest-bwb.ts",
+    "ingest:all": "tsx scripts/auto-ingest-all-statutes.ts",
     "ingest:cases": "tsx scripts/ingest-rechtspraak.ts",
     "ingest:prep-works": "tsx scripts/ingest-preparatory-works.ts",
     "check-updates": "tsx scripts/check-updates.ts",
     "extract:definitions": "tsx scripts/extract-definitions.ts",
+    "populate:xrefs": "tsx scripts/populate-cross-references.ts",
     "audit:seeds": "tsx scripts/audit-seeds.ts",
     "fetch:eurlex": "tsx scripts/fetch-eurlex-metadata.ts",
     "import:eurlex-documents": "tsx scripts/import-eurlex-documents.ts",
+    "populate:versions": "tsx scripts/populate-provision-versions.ts",
+    "lint": "eslint src/ tests/ scripts/",
+    "lint:fix": "eslint --fix src/ tests/ scripts/",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky",
     "prepublishOnly": "npm run build",
     "postinstall": "test -d dist || npm run build || true"
   },
@@ -35,10 +43,16 @@
     "@modelcontextprotocol/sdk": "^1.25.3"
   },
   "devDependencies": {
+    "@eslint/js": "^9.27.0",
     "@types/node": "^22.15.29",
+    "eslint": "^9.27.0",
     "fast-xml-parser": "^5.3.5",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.1.0",
+    "prettier": "^3.5.3",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.33.1",
     "vitest": "^4.0.18"
   },
   "engines": {

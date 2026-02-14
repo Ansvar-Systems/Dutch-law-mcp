@@ -184,6 +184,18 @@ function collectArtikels(
     collectArtikels(boekObj, newContext, provisions);
   }
 
+  // Process hoofdstuk (chapter-level, used in Grondwet, Awb, etc.)
+  for (const hoofdstuk of toArray(obj['hoofdstuk'])) {
+    if (hoofdstuk == null || typeof hoofdstuk !== 'object') continue;
+    const hoofdstukObj = hoofdstuk as Record<string, unknown>;
+    const chapterNr = getKopNr(hoofdstukObj);
+    const newContext: HierarchyContext = {
+      ...context,
+      chapter: chapterNr ?? context.chapter,
+    };
+    collectArtikels(hoofdstukObj, newContext, provisions);
+  }
+
   // Process titeldeel (chapter-level)
   for (const titeldeel of toArray(obj['titeldeel'])) {
     if (titeldeel == null || typeof titeldeel !== 'object') continue;
@@ -249,7 +261,7 @@ export function parseBwbXml(xml: string): ParsedStatute {
     ignoreAttributes: false,
     attributeNamePrefix: '@_',
     isArray: (name: string) =>
-      ['boek', 'titeldeel', 'afdeling', 'paragraaf', 'artikel', 'lid', 'al'].includes(name),
+      ['boek', 'hoofdstuk', 'titeldeel', 'afdeling', 'paragraaf', 'artikel', 'lid', 'al'].includes(name),
   });
 
   const doc = parser.parse(xml) as Record<string, unknown>;
@@ -291,16 +303,26 @@ export function parseBwbXml(xml: string): ParsedStatute {
   const title = (intitule ? extractText(intitule).trim() : '')
     || (citeertitel ? extractText(citeertitel).trim() : '');
 
-  // Navigate to wettekst — may be under wet-besluit inside wetgeving
+  // Navigate to the content container — different structures exist:
+  //   Wetten:     wetgeving > wet-besluit > wettekst
+  //   Regelingen: wetgeving > regeling > regeling-tekst
+  //   Fallback:   wetgeving > wettekst (direct)
   const wetBesluitInner = wetgeving['wet-besluit'] as Record<string, unknown> | undefined;
-  const wettekst = (wetBesluitInner?.['wettekst'] ?? wetgeving['wettekst']) as Record<string, unknown> | undefined;
-  if (!wettekst) {
+  const regelingInner = wetgeving['regeling'] as Record<string, unknown> | undefined;
+
+  const contentRoot =
+    wetBesluitInner?.['wettekst'] ??
+    regelingInner?.['regeling-tekst'] ??
+    wetgeving['wettekst'] ??
+    wetgeving['regeling-tekst'];
+
+  if (!contentRoot || typeof contentRoot !== 'object') {
     return { bwb_id: bwbId, title, provisions: [] };
   }
 
   // Collect all provisions by traversing the hierarchy
   const provisions: ParsedProvision[] = [];
-  collectArtikels(wettekst, {}, provisions);
+  collectArtikels(contentRoot as Record<string, unknown>, {}, provisions);
 
   return { bwb_id: bwbId, title, provisions };
 }

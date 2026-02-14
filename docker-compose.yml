@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  dutch-law-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ansvar/dutch-law-mcp:latest
+    container_name: dutch-law-mcp-server
+
+    environment:
+      - NODE_ENV=production
+      - DUTCH_LAW_DB_PATH=/app/data/database.db
+
+    # Mount database as read-only for production use
+    volumes:
+      - ./data/database.db:/app/data/database.db:ro
+
+    # MCP servers communicate over stdio (standard input/output)
+    # Keep stdin open for MCP protocol communication
+    stdin_open: true
+    tty: false
+
+    # No ports needed - MCP uses stdio for communication
+    # This is NOT a web service
+
+    restart: unless-stopped
+
+    # Resource limits (optional, adjust as needed)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

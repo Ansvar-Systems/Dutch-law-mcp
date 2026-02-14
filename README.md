@@ -56,6 +56,7 @@ Or with a custom database path:
 | `search_eu_implementations` | Search EU instruments and their Dutch implementations |
 | `get_provision_eu_basis` | Get EU references for a specific provision |
 | `validate_eu_compliance` | Validate EU compliance for a Dutch statute or provision |
+| `get_provision_at_date` | Retrieve a specific provision as it was at a given date (historical versioning) |
 
 ## Data Sources
 
@@ -103,10 +104,22 @@ npm run test:watch      # Watch mode
 npm run test:coverage   # With coverage report
 ```
 
+### Linting and Formatting
+
+```bash
+npm run lint           # Check for lint errors
+npm run lint:fix       # Auto-fix lint errors
+npm run format         # Format all files
+npm run format:check   # Check formatting
+```
+
+Pre-commit hooks via Husky and lint-staged automatically run ESLint and Prettier on staged files.
+
 ### Ingestion Scripts
 
 ```bash
 npm run ingest              # Ingest statutes from wetten.overheid.nl (BWB)
+npm run ingest:all          # Comprehensive ingestion of ALL Dutch statutes
 npm run ingest:cases        # Ingest case law from rechtspraak.nl
 npm run ingest:prep-works   # Ingest kamerstukken (parliamentary documents)
 npm run build:db            # Build the SQLite database from seed files
@@ -122,17 +135,35 @@ npm run import:eurlex-documents  # Import EU law references into database
 ```
 src/
   index.ts              # MCP server entry point
-  tools/                # 13 MCP tool implementations
-  parsers/              # BWB XML parser, EU reference parser
+  tools/                # 14 MCP tool implementations
+  parsers/              # BWB XML parser, EU reference parser, amendment parser, cross-ref extractor
   citation/             # Citation parsing and formatting
   types/                # TypeScript type definitions
   utils/                # Shared utilities
 scripts/                # Ingestion and build scripts
 tests/                  # Vitest test suites
+docs/                   # EU integration guide, coverage limitations
 data/
   seed/                 # JSON seed files (one per statute/batch)
   database.db           # SQLite database (built from seeds)
 ```
+
+## Docker
+
+### Build and run
+
+```bash
+docker build -t dutch-law-mcp .
+docker run --rm -i dutch-law-mcp
+```
+
+### Docker Compose
+
+```bash
+docker compose up -d
+```
+
+The Docker image uses a multi-stage build with a non-root user for security. The database is mounted as a read-only volume.
 
 ## License
 

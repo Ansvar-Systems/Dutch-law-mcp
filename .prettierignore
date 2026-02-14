@@ -1,0 +1,9 @@
+dist
+node_modules
+coverage
+data
+*.db
+*.json
+!package.json
+!tsconfig.json
+!.prettierrc
