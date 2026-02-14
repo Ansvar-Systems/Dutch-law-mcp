@@ -37,7 +37,7 @@
     "lint:fix": "eslint --fix src/ tests/ scripts/",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "prepare": "husky",
+    "prepare": "node -e \"try{require('husky')}catch(e){process.exit(0)}\" && husky || true",
     "prepublishOnly": "npm run build",
     "postinstall": "test -d dist || npm run build || true"
   },
