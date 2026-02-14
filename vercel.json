@@ -2,13 +2,13 @@
   "crons": [
     { "path": "/health", "schedule": "*/5 * * * *" }
   ],
-  "buildCommand": "npm run build",
+  "buildCommand": "bash scripts/download-free-db.sh && npm run build",
   "outputDirectory": ".",
   "functions": {
     "api/mcp.ts": {
-      "maxDuration": 60,
+      "maxDuration": 30,
       "memory": 1024,
-      "includeFiles": "node_modules/node-sqlite3-wasm/dist/node-sqlite3-wasm.wasm"
+      "includeFiles": "{data/database-free.db,node_modules/node-sqlite3-wasm/dist/node-sqlite3-wasm.wasm}"
     }
   },
   "rewrites": [

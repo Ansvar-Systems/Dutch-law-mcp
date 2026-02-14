@@ -1,5 +1,9 @@
-data/
-scripts/
+data/database.db
+data/database.db.gz
+data/database.db-journal
+data/database.db-wal
+data/database.db-shm
+data/seed/
 tests/
 docs/
 *.md

@@ -25,7 +25,8 @@ yarn-error.log*
 # ───────────────────────────────────────────────────────────────────────────
 
 # Database — build artifact, regenerated from seed data via `npm run build:db`
-data/*.db
+data/database.db
+data/database-free.db
 
 # Seed files (too large for git - 700MB+)
 data/seed/
