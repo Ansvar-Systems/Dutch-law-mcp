@@ -1,0 +1,35 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "eu.ansvar/dutch-law-mcp",
+  "description": "Query Dutch statutes, 202K+ court decisions, EU cross-references, and kamerstukken",
+  "repository": {
+    "url": "https://github.com/Ansvar-Systems/Dutch-law-mcp",
+    "source": "github"
+  },
+  "homepage": "https://ansvar.eu",
+  "version": "1.0.0",
+  "license": "Apache-2.0",
+  "keywords": [
+    "dutch-law",
+    "netherlands",
+    "legal",
+    "wetten",
+    "bwb",
+    "rechtspraak",
+    "compliance",
+    "gdpr",
+    "avg",
+    "eu-law",
+    "mcp"
+  ],
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@ansvar/dutch-law-mcp",
+      "version": "1.0.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

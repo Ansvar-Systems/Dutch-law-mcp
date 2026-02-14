@@ -1,6 +1,6 @@
 # Dutch Law MCP Server
 
-Production-grade [Model Context Protocol](https://modelcontextprotocol.io/) server for Dutch legal research. Provides AI assistants with structured access to Dutch statutes (wetten), case law (rechtspraak), preparatory works (kamerstukken), and EU cross-references.
+Production-grade [Model Context Protocol](https://modelcontextprotocol.io/) server for Dutch legal research. Provides AI assistants with structured access to 3,248 Dutch statutes, 903,000+ court decisions, 21,000+ kamerstukken, and 1,000+ EU cross-references.
 
 ## Installation
 
@@ -67,6 +67,17 @@ Or with a custom database path:
 | **EUR-Lex** | Official EU legislation database | https://eur-lex.europa.eu |
 
 All data is sourced from official open data portals and stored locally in a SQLite database for fast, offline-capable lookups.
+
+## Data Coverage
+
+| Metric | Count |
+|--------|-------|
+| **Statutes** | 3,248 (wetten, AMvBs, ministerial regulations) |
+| **Provisions** | 79,967 individual articles |
+| **Case law** | 903,000+ court decisions (ECLI-indexed) |
+| **Kamerstukken** | 21,891 parliamentary documents |
+| **EU documents** | 1,008 directives and regulations |
+| **Definitions** | 64 extracted legal terms |
 
 ## Supported Citation Formats
 

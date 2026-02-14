@@ -29,15 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Data Coverage
 
 **Dutch Statutes:**
-- **12 major statutes** including:
-  - Burgerlijk Wetboek (Books 1-10)
-  - Wetboek van Strafrecht
-  - Algemene wet bestuursrecht
-  - Wetboek van Burgerlijke Rechtsvordering
-  - And 8 more fundamental Dutch laws
+- **3,248 statutes** including wetten, AMvBs, and ministerial regulations
+- **79,967 provisions** (individual articles) with full-text search
+- Key statutes include Burgerlijk Wetboek (Books 1-10), Wetboek van Strafrecht, Algemene wet bestuursrecht, Wetboek van Burgerlijke Rechtsvordering, and thousands more
 
 **Court Decisions:**
-- **202,000+ case law decisions** from rechtspraak.nl
+- **903,000+ case law decisions** from rechtspraak.nl
 - Coverage from all major Dutch courts:
   - Hoge Raad (Supreme Court)
   - Gerechtshoven (Courts of Appeal)
@@ -46,11 +43,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - College van Beroep voor het bedrijfsleven
 - **ECLI-indexed** for European Case Law Identifier standard
 
+**Parliamentary Documents:**
+- **21,891 kamerstukken** (parliamentary documents)
+- Linked to statutes for legislative history research
+
 **EU Cross-References:**
-- **948 EU documents** linked to Dutch statutes
+- **1,008 EU documents** (500 directives, 487 regulations, 21 referenced)
+- **38 explicit EU-Dutch implementation links**
 - Bi-directional lookup (EU → Dutch, Dutch → EU)
 - CELEX numbers for official EUR-Lex references
 - Provision-level granularity for implementation tracking
+
+**Definitions:**
+- **64 legal term definitions** extracted from statute text
 
 #### Parsers & Citation Support
 
@@ -152,10 +157,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Data Quality
 
 - **Verified data only:** All data from official government sources
-- **202,000+ court decisions** with ECLI identifiers
-- **12 complete statutes** with full article text
-- **948 EU documents** with Dutch implementation links
-- **Database size:** ~450MB (compressed in npm package)
+- **903,000+ court decisions** with ECLI identifiers
+- **3,248 statutes** with 79,967 provisions
+- **21,891 kamerstukken** for legislative history
+- **1,008 EU documents** with Dutch implementation links
+- **Database size:** ~1GB
 - **Search performance:** <100ms for most queries
 
 ### Data Sources & Attribution
@@ -173,7 +179,7 @@ All sources are official government/EU portals, used in accordance with open dat
 
 | Version | Date | Key Changes |
 |---------|------|-------------|
-| **1.0.0** | 2026-02-13 | Initial production release (13 tools, 202K cases, 12 statutes, 948 EU docs) |
+| **1.0.0** | 2026-02-13 | Initial production release (14 tools, 903K cases, 3,248 statutes, 1,008 EU docs) |
 
 ---
 
@@ -199,10 +205,11 @@ npm install @ansvar/dutch-law-mcp
 ```
 
 **Features:**
-- 13 MCP tools for Dutch legal research
-- 202,000+ case law decisions
-- 12 major Dutch statutes
-- 948 EU cross-references
+- 14 MCP tools for Dutch legal research
+- 903,000+ case law decisions
+- 3,248 Dutch statutes with 79,967 provisions
+- 21,891 kamerstukken
+- 1,008 EU cross-references
 - Full-text search with FTS5
 - Citation parsing and validation
 
@@ -215,20 +222,25 @@ npm install @ansvar/dutch-law-mcp
 #### Statutes
 - **Source:** wetten.overheid.nl (Basiswettenbestand - BWB)
 - **License:** Dutch Government Open Data policy
-- **Access:** Official open data portal
-- **Coverage:** 12 major Dutch statutes
+- **Access:** Official open data portal via SRU service
+- **Coverage:** 3,248 statutes (wetten, AMvBs, ministerial regulations) with 79,967 provisions
 
 #### Court Decisions
 - **Source:** rechtspraak.nl (Open Data Rechtspraak)
 - **License:** Dutch Government Open Data policy
-- **Coverage:** 202,000+ decisions from all major Dutch courts
+- **Coverage:** 903,000+ decisions from all major Dutch courts
 - **Attribution:** All case law results include source metadata
+
+#### Parliamentary Documents
+- **Source:** officielebekendmakingen.nl
+- **License:** Dutch Government Open Data policy
+- **Coverage:** 21,891 kamerstukken
 
 #### EU Cross-References
 - **Source:** Dutch statute text (wetten.overheid.nl) and EUR-Lex
 - **Extraction:** Automated parser with validation
 - **Validation:** CELEX number format verification
-- **Coverage:** 948 EU documents linked to Dutch implementations
+- **Coverage:** 1,008 EU documents (500 directives, 487 regulations, 21 referenced)
 
 ---
 
@@ -237,11 +249,11 @@ npm install @ansvar/dutch-law-mcp
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 Priority areas for future contributions:
-- Additional statutes (expand beyond current 12)
-- Historical statute versions
-- Lower court decisions (kantonrechter, etc.)
+- Historical statute versions (amendment tracking)
 - English translations for key statutes
 - Integration with EU Regulations MCP
+- Full kamerstuk text (currently metadata/summaries)
+- Expanded legal definitions extraction
 
 ---
 
