@@ -129,3 +129,14 @@ export function upgradeMessage(feature: string): string {
     `Contact Ansvar Systems (hello@ansvar.ai) to upgrade.`
   );
 }
+
+/**
+ * Check whether a specific table exists in the database.
+ * Useful for guarding tool execution against missing tables on the free tier.
+ */
+export function hasTable(db: InstanceType<typeof Database>, tableName: string): boolean {
+  const row = db.prepare(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name=?"
+  ).get(tableName);
+  return row != null;
+}

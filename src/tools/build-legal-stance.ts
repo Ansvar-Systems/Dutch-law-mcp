@@ -2,6 +2,7 @@ import type { Database } from '@ansvar/mcp-sqlite';
 import { generateResponseMetadata, type ToolResponse } from '../utils/metadata.js';
 import { searchLegislation, type SearchLegislationResult } from './search-legislation.js';
 import { searchCaseLaw, type SearchCaseLawResult } from './search-case-law.js';
+import { hasTable } from '../capabilities.js';
 
 export interface BuildLegalStanceInput {
   query: string;
@@ -52,18 +53,31 @@ export async function buildLegalStance(
     limit,
   });
 
-  // 2. Search case law
-  const caseLawResults = await searchCaseLaw(db, {
-    query,
-    limit,
-  });
+  // 2. Check which tables are available (graceful degradation for free tier)
+  const hasCaseLaw = hasTable(db, 'case_law');
+  const hasPrepWorks = hasTable(db, 'preparatory_works');
+  const hasCrossRefs = hasTable(db, 'cross_references');
 
-  // 3. Collect relevant statute IDs from provisions
+  const upgradeNotices: string[] = [];
+
+  // 3. Search case law (if available)
+  let caseLawResults: SearchCaseLawResult[] = [];
+  if (hasCaseLaw) {
+    const clResponse = await searchCaseLaw(db, { query, limit });
+    caseLawResults = clResponse.results;
+  } else {
+    upgradeNotices.push(
+      'Case law results omitted — requires Professional tier. ' +
+      'Contact hello@ansvar.ai for access to 900,000+ Dutch court decisions.'
+    );
+  }
+
+  // 4. Collect relevant statute IDs from provisions
   const statuteIds = [...new Set(provisionResults.results.map(p => p.document_id))];
 
-  // 4. Fetch preparatory works for found statutes
+  // 5. Fetch preparatory works for found statutes (if available)
   const preparatoryWorks: PreparatoryWorkSummary[] = [];
-  if (statuteIds.length > 0) {
+  if (hasPrepWorks && statuteIds.length > 0) {
     const placeholders = statuteIds.map(() => '?').join(',');
     const prepSql = `
       SELECT
@@ -79,19 +93,24 @@ export async function buildLegalStance(
     `;
     const prepRows = db.prepare(prepSql).all(...statuteIds) as PreparatoryWorkSummary[];
     preparatoryWorks.push(...prepRows);
+  } else if (!hasPrepWorks) {
+    upgradeNotices.push(
+      'Preparatory works (kamerstukken) omitted — requires Professional tier. ' +
+      'Contact hello@ansvar.ai for access to parliamentary documents.'
+    );
   }
 
-  // 5. Collect provision refs from found provisions and case law
+  // 6. Collect provision refs from found provisions and case law
   const provisionDocRefs = provisionResults.results.map(p => ({
     doc: p.document_id,
     ref: p.provision_ref,
   }));
-  const caseLawDocIds = caseLawResults.results.map(c => c.document_id);
+  const caseLawDocIds = caseLawResults.map(c => c.document_id);
   const allDocIds = [...new Set([...statuteIds, ...caseLawDocIds])];
 
-  // 6. Fetch cross-references for relevant documents
+  // 7. Fetch cross-references for relevant documents (if available)
   const crossReferences: CrossReferenceSummary[] = [];
-  if (allDocIds.length > 0) {
+  if (hasCrossRefs && allDocIds.length > 0) {
     const placeholders = allDocIds.map(() => '?').join(',');
     const xrefSql = `
       SELECT
@@ -115,10 +134,19 @@ export async function buildLegalStance(
   const result: BuildLegalStanceResult = {
     query,
     provisions: provisionResults.results,
-    case_law: caseLawResults.results,
+    case_law: caseLawResults,
     preparatory_works: preparatoryWorks,
     cross_references: crossReferences,
   };
 
-  return { results: result, _metadata: generateResponseMetadata(db) };
+  const response: ToolResponse<BuildLegalStanceResult> & { upgrade_notices?: string[] } = {
+    results: result,
+    _metadata: generateResponseMetadata(db),
+  };
+
+  if (upgradeNotices.length > 0) {
+    response.upgrade_notices = upgradeNotices;
+  }
+
+  return response;
 }

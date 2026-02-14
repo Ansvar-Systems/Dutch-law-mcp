@@ -1,6 +1,7 @@
 import type { Database } from '@ansvar/mcp-sqlite';
 import { buildFtsQueryVariants } from '../utils/fts-query.js';
 import { generateResponseMetadata, type ToolResponse } from '../utils/metadata.js';
+import { hasTable } from '../capabilities.js';
 
 export interface SearchCaseLawInput {
   query: string;
@@ -131,6 +132,18 @@ export async function searchCaseLaw(
   db: Database,
   input: SearchCaseLawInput,
 ): Promise<ToolResponse<SearchCaseLawResult[]>> {
+  // Guard: check that case law tables exist (missing on free tier)
+  if (!hasTable(db, 'case_law')) {
+    return {
+      results: [],
+      _metadata: generateResponseMetadata(db),
+      upgrade_notice:
+        'Case law search requires the Professional tier. ' +
+        'The free tier provides statute search, definitions, and EU cross-references. ' +
+        'Contact hello@ansvar.ai for access to 900,000+ Dutch court decisions and parliamentary documents.',
+    } as ToolResponse<SearchCaseLawResult[]> & { upgrade_notice: string };
+  }
+
   const { court, legal_domain, procedure_type, date_from, date_to } = input;
   const limit = clampLimit(input.limit);
 

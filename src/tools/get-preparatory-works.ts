@@ -1,5 +1,6 @@
 import type { Database } from '@ansvar/mcp-sqlite';
 import { generateResponseMetadata, type ToolResponse } from '../utils/metadata.js';
+import { hasTable } from '../capabilities.js';
 
 export interface GetPreparatoryWorksInput {
   statute_id: string;
@@ -29,6 +30,18 @@ export async function getPreparatoryWorks(
   db: Database,
   input: GetPreparatoryWorksInput,
 ): Promise<ToolResponse<GetPreparatoryWorksResult[]>> {
+  // Guard: check that preparatory_works table exists (missing on free tier)
+  if (!hasTable(db, 'preparatory_works')) {
+    return {
+      results: [],
+      _metadata: generateResponseMetadata(db),
+      upgrade_notice:
+        'Preparatory works (kamerstukken) require the Professional tier. ' +
+        'The free tier provides statute search, definitions, and EU cross-references. ' +
+        'Contact hello@ansvar.ai for access to parliamentary documents including memorie van toelichting, amendementen, and more.',
+    } as ToolResponse<GetPreparatoryWorksResult[]> & { upgrade_notice: string };
+  }
+
   const { statute_id, document_type } = input;
   const limit = clampLimit(input.limit);
 
