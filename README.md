@@ -2,17 +2,57 @@
 
 Production-grade [Model Context Protocol](https://modelcontextprotocol.io/) server for Dutch legal research. Provides AI assistants with structured access to 3,248 Dutch statutes, 903,000+ court decisions, 21,000+ kamerstukken, and 1,000+ EU cross-references.
 
-## Installation
+## Quick Start
 
-```bash
-npm install @ansvar/dutch-law-mcp
+### Use Remotely (No Install Needed)
+
+> Connect directly to the hosted version — zero dependencies, nothing to install.
+
+**Endpoint:** `https://dutch-law-mcp.vercel.app/mcp`
+
+| Client | How to Connect |
+|--------|---------------|
+| **Claude.ai** | Settings > Connectors > Add Integration > paste URL |
+| **Claude Code** | `claude mcp add dutch-law --transport http https://dutch-law-mcp.vercel.app/mcp` |
+| **Claude Desktop** | Add to config (see below) |
+| **GitHub Copilot** | Add to VS Code settings (see below) |
+
+**Claude Desktop** — add to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "dutch-law": {
+      "type": "url",
+      "url": "https://dutch-law-mcp.vercel.app/mcp"
+    }
+  }
+}
 ```
 
-On first run, the ~1 GB SQLite database is automatically downloaded from GitHub Releases and cached at `~/.cache/dutch-law-mcp/database.db`. Subsequent runs use the cached copy.
+**GitHub Copilot** — add to VS Code `settings.json`:
 
-### Claude Desktop Configuration
+```json
+{
+  "github.copilot.chat.mcp.servers": {
+    "dutch-law": {
+      "type": "http",
+      "url": "https://dutch-law-mcp.vercel.app/mcp"
+    }
+  }
+}
+```
 
-Add to your Claude Desktop configuration file (`claude_desktop_config.json`):
+### Use Locally (npm)
+
+```bash
+npx @ansvar/dutch-law-mcp
+```
+
+**Claude Desktop** — add to `claude_desktop_config.json`:
+
+**macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
@@ -25,50 +65,17 @@ Add to your Claude Desktop configuration file (`claude_desktop_config.json`):
 }
 ```
 
-Or with a custom database path (skips download):
+**Cursor / VS Code:**
 
 ```json
 {
-  "mcpServers": {
+  "mcp.servers": {
     "dutch-law": {
       "command": "npx",
-      "args": ["-y", "@ansvar/dutch-law-mcp"],
-      "env": {
-        "DUTCH_LAW_DB_PATH": "/path/to/database.db"
-      }
+      "args": ["-y", "@ansvar/dutch-law-mcp"]
     }
   }
 }
-```
-
-### HTTP Endpoint (ChatGPT, Claude browser, remote clients)
-
-For clients that connect over HTTP instead of stdio:
-
-```bash
-npx @ansvar/dutch-law-mcp-http
-```
-
-Or run directly:
-
-```bash
-npm run start:http
-```
-
-The HTTP server exposes:
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | Health check (`{ "status": "healthy" }`) |
-| `/mcp` | GET | Server metadata JSON |
-| `/mcp` | POST | MCP protocol (Streamable HTTP transport) |
-| `/mcp` | DELETE | Session termination |
-
-Configure with environment variables:
-
-```bash
-PORT=3000      # HTTP port (default: 3000)
-HOST=0.0.0.0   # Bind address (default: 0.0.0.0)
 ```
 
 ## Available Tools
