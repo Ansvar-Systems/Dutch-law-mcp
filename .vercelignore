@@ -1,0 +1,6 @@
+data/
+scripts/
+tests/
+docs/
+*.md
+.github/

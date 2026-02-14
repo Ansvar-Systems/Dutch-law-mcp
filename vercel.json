@@ -1,0 +1,15 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": ".",
+  "functions": {
+    "api/mcp.ts": {
+      "maxDuration": 60,
+      "memory": 1024,
+      "includeFiles": "node_modules/node-sqlite3-wasm/dist/node-sqlite3-wasm.wasm"
+    }
+  },
+  "rewrites": [
+    { "source": "/mcp", "destination": "/api/mcp" },
+    { "source": "/health", "destination": "/api/health" }
+  ]
+}
