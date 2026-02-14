@@ -124,9 +124,9 @@ export function isProfessionalCapability(capability: Capability): boolean {
  */
 export function upgradeMessage(feature: string): string {
   return (
-    `The "${feature}" feature requires the Professional tier of Dutch Law MCP. ` +
-    `This instance is running the free tier. ` +
-    `Contact Ansvar Systems (hello@ansvar.ai) to upgrade.`
+    `${feature} is not available in this free community instance. ` +
+    `The full case law and preparatory works databases are too large to serve from a free hosted endpoint. ` +
+    `These datasets are included when Ansvar delivers consulting services, and may become available as a separate paid service in the future.`
   );
 }
 

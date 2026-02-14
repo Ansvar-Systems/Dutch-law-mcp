@@ -67,8 +67,7 @@ export async function buildLegalStance(
     caseLawResults = clResponse.results;
   } else {
     upgradeNotices.push(
-      'Case law results omitted — requires Professional tier. ' +
-      'Contact hello@ansvar.ai for access to 900,000+ Dutch court decisions.'
+      'Case law results omitted — the Dutch case law database (900,000+ court decisions) is too large to serve from this free community instance.'
     );
   }
 
@@ -95,8 +94,7 @@ export async function buildLegalStance(
     preparatoryWorks.push(...prepRows);
   } else if (!hasPrepWorks) {
     upgradeNotices.push(
-      'Preparatory works (kamerstukken) omitted — requires Professional tier. ' +
-      'Contact hello@ansvar.ai for access to parliamentary documents.'
+      'Preparatory works (kamerstukken) omitted — the parliamentary documents database is too large to serve from this free community instance.'
     );
   }
 

@@ -36,9 +36,9 @@ export async function getPreparatoryWorks(
       results: [],
       _metadata: generateResponseMetadata(db),
       upgrade_notice:
-        'Preparatory works (kamerstukken) require the Professional tier. ' +
-        'The free tier provides statute search, definitions, and EU cross-references. ' +
-        'Contact hello@ansvar.ai for access to parliamentary documents including memorie van toelichting, amendementen, and more.',
+        'Preparatory works (kamerstukken) are not available in this free community instance. ' +
+        'The parliamentary documents database is too large to serve from a free hosted endpoint. ' +
+        'These datasets are included when Ansvar delivers consulting services, and may become available as a separate paid service in the future.',
     } as ToolResponse<GetPreparatoryWorksResult[]> & { upgrade_notice: string };
   }
 
