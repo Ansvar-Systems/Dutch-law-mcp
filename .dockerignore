@@ -55,9 +55,6 @@ data/seed
 .npmignore
 smithery.yaml
 
-# TypeScript config (only needed during build)
-tsconfig.json
-
 # Other development files
 CHANGELOG.md
 CONTRIBUTING.md
