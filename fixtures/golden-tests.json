@@ -1,0 +1,167 @@
+{
+  "$schema": "./golden-tests.schema.json",
+  "version": "1.0",
+  "mcp_name": "Dutch Law MCP",
+  "description": "Golden contract tests for the Dutch Law MCP",
+  "tests": [
+    {
+      "id": "nl-001",
+      "category": "article_retrieval",
+      "description": "Retrieve Article 1 of the Grondwet (anti-discrimination)",
+      "tool": "get_provision",
+      "input": {
+        "document_id": "BWBR0001840",
+        "article": "1"
+      },
+      "assertions": {
+        "result_not_empty": true,
+        "text_contains": ["discriminatie"],
+        "fields_present": ["results"]
+      }
+    },
+    {
+      "id": "nl-002",
+      "category": "article_retrieval",
+      "description": "Retrieve Article 287 of the Wetboek van Strafrecht (doodslag)",
+      "tool": "get_provision",
+      "input": {
+        "document_id": "BWBR0001854",
+        "article": "287"
+      },
+      "assertions": {
+        "result_not_empty": true,
+        "text_contains": ["leven"],
+        "fields_present": ["results"]
+      }
+    },
+    {
+      "id": "nl-003",
+      "category": "article_retrieval",
+      "description": "Retrieve Article 6:162 BW (onrechtmatige daad / tort law)",
+      "tool": "get_provision",
+      "input": {
+        "document_id": "BWBR0005289",
+        "book": "6",
+        "article": "162"
+      },
+      "assertions": {
+        "result_not_empty": true,
+        "fields_present": ["results"]
+      }
+    },
+    {
+      "id": "nl-004",
+      "category": "article_retrieval",
+      "description": "Retrieve all provisions of the Grondwet (no specific article)",
+      "tool": "get_provision",
+      "input": {
+        "document_id": "BWBR0001840"
+      },
+      "assertions": {
+        "result_not_empty": true,
+        "min_results": 5
+      }
+    },
+    {
+      "id": "nl-005",
+      "category": "search",
+      "description": "Search for 'persoonsgegevens' returns GDPR-related results",
+      "tool": "search_legislation",
+      "input": {
+        "query": "persoonsgegevens"
+      },
+      "assertions": {
+        "result_not_empty": true,
+        "min_results": 1
+      }
+    },
+    {
+      "id": "nl-006",
+      "category": "search",
+      "description": "Search for 'arbeidsovereenkomst' returns employment law results",
+      "tool": "search_legislation",
+      "input": {
+        "query": "arbeidsovereenkomst"
+      },
+      "assertions": {
+        "result_not_empty": true,
+        "min_results": 1
+      }
+    },
+    {
+      "id": "nl-007",
+      "category": "citation_roundtrip",
+      "description": "Validate a well-known Dutch legal citation",
+      "tool": "validate_citation",
+      "input": {
+        "citation": "Art. 6:162 BW"
+      },
+      "assertions": {
+        "result_not_empty": true,
+        "fields_present": ["results"]
+      }
+    },
+    {
+      "id": "nl-008",
+      "category": "citation_roundtrip",
+      "description": "Format citation returns standard Dutch format",
+      "tool": "format_citation",
+      "input": {
+        "citation": "Art. 287 Sr"
+      },
+      "assertions": {
+        "result_not_empty": true
+      }
+    },
+    {
+      "id": "nl-009",
+      "category": "eu_cross_reference",
+      "description": "EU basis lookup for Uitvoeringswet AVG returns GDPR references",
+      "tool": "get_eu_basis",
+      "input": {
+        "document_id": "BWBR0040940"
+      },
+      "assertions": {
+        "result_not_empty": true,
+        "any_result_contains": ["2016/679", "GDPR", "gegevensbescherming", "persoonsgegevens"]
+      }
+    },
+    {
+      "id": "nl-010",
+      "category": "negative_test",
+      "description": "Non-existent law returns gracefully without error",
+      "tool": "get_provision",
+      "input": {
+        "document_id": "BWBR9999999",
+        "article": "1"
+      },
+      "assertions": {
+        "handles_gracefully": true
+      }
+    },
+    {
+      "id": "nl-011",
+      "category": "negative_test",
+      "description": "Search with no results handled gracefully",
+      "tool": "search_legislation",
+      "input": {
+        "query": "xyznonexistentlawterm9999"
+      },
+      "assertions": {
+        "handles_gracefully": true
+      }
+    },
+    {
+      "id": "nl-012",
+      "category": "negative_test",
+      "description": "Invalid citation format handled gracefully",
+      "tool": "validate_citation",
+      "input": {
+        "citation": "not-a-real-citation-12345"
+      },
+      "assertions": {
+        "handles_gracefully": true
+      }
+    }
+  ]
+}

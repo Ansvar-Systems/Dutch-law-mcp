@@ -1,0 +1,49 @@
+{
+  "$schema": "./golden-hashes.schema.json",
+  "version": "1.0",
+  "mcp_name": "Dutch Law MCP",
+  "jurisdiction": "NL",
+  "description": "Drift detection anchors for stable Dutch legal provisions. Constitutional and foundational articles that rarely change.",
+  "provisions": [
+    {
+      "id": "nl-hash-001",
+      "description": "Grondwet Article 1 — anti-discrimination, fundamental equality",
+      "upstream_url": "https://wetten.overheid.nl/BWBR0001840/2023-02-22#Hoofdstuk1_Artikel1",
+      "selector_hint": "Article 1",
+      "expected_sha256": "COMPUTE_ON_FIRST_RUN",
+      "expected_snippet": "Allen die zich in Nederland bevinden"
+    },
+    {
+      "id": "nl-hash-002",
+      "description": "Grondwet Article 23 — freedom of education (onderwijs)",
+      "upstream_url": "https://wetten.overheid.nl/BWBR0001840/2023-02-22#Hoofdstuk1_Artikel23",
+      "selector_hint": "Article 23",
+      "expected_sha256": "COMPUTE_ON_FIRST_RUN",
+      "expected_snippet": "Het onderwijs is een voorwerp van de aanhoudende zorg der regering"
+    },
+    {
+      "id": "nl-hash-003",
+      "description": "BW Boek 6 Article 162 — tort law (onrechtmatige daad)",
+      "upstream_url": "https://wetten.overheid.nl/BWBR0005289/2024-01-01#Boek6_Titeldeel3_Afdeling1_Artikel162",
+      "selector_hint": "Article 6:162",
+      "expected_sha256": "COMPUTE_ON_FIRST_RUN",
+      "expected_snippet": "onrechtmatige daad"
+    },
+    {
+      "id": "nl-hash-004",
+      "description": "Awb Article 1:1 — definitions (bestuursorgaan)",
+      "upstream_url": "https://wetten.overheid.nl/BWBR0005537/2024-01-01#Hoofdstuk1_Titeldeel1.1_Artikel1:1",
+      "selector_hint": "Article 1:1",
+      "expected_sha256": "COMPUTE_ON_FIRST_RUN",
+      "expected_snippet": "bestuursorgaan"
+    },
+    {
+      "id": "nl-hash-005",
+      "description": "Wetboek van Strafvordering Article 1 — legality principle",
+      "upstream_url": "https://wetten.overheid.nl/BWBR0001903/2024-01-01#BoekEerste_TiteldeelI_Artikel1",
+      "selector_hint": "Article 1",
+      "expected_sha256": "COMPUTE_ON_FIRST_RUN",
+      "expected_snippet": "Strafvordering heeft alleen plaats op de wijze bij de wet voorzien"
+    }
+  ]
+}

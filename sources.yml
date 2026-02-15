@@ -1,0 +1,48 @@
+# sources.yml — Data provenance metadata
+# Reference: docs/mcp-infrastructure-blueprint.md §3
+
+schema_version: '1.0'
+mcp_name: 'Dutch Law MCP'
+jurisdiction: 'NL'
+
+sources:
+  - name: 'Wetten.overheid.nl'
+    authority: 'Dutch Government (Overheid.nl)'
+    official_portal: 'https://wetten.overheid.nl'
+    canonical_identifier: 'ELI (European Legislation Identifier)'
+    retrieval_method: 'XML_DOWNLOAD'
+    api_documentation: 'https://www.overheid.nl/help/api'
+    update_frequency: 'daily'
+    last_ingested: '2026-02-10'
+    license_or_terms:
+      type: 'Government Open Data (CC0)'
+      url: 'https://data.overheid.nl/licenties'
+      summary: 'Dutch government open data, free to use without restrictions'
+    coverage:
+      scope: 'All consolidated Dutch statutes, AMvBs, ministerial regulations'
+      limitations: 'Historical versions before 2002 may be incomplete'
+    languages:
+      - 'nl'
+
+  - name: 'Rechtspraak.nl'
+    authority: 'De Rechtspraak (Dutch Judiciary)'
+    official_portal: 'https://uitspraken.rechtspraak.nl'
+    canonical_identifier: 'ECLI (European Case Law Identifier)'
+    retrieval_method: 'API'
+    api_documentation: 'https://www.rechtspraak.nl/Uitspraken/paginas/open-data.aspx'
+    update_frequency: 'daily'
+    last_ingested: '2026-02-10'
+    license_or_terms:
+      type: 'Open Justice Data'
+      url: 'https://www.rechtspraak.nl/Uitspraken/paginas/open-data.aspx'
+      summary: 'Court decisions are public, free to reuse with ECLI citation'
+    coverage:
+      scope: 'Published court decisions from all Dutch courts (202K+ decisions)'
+      limitations: 'Not all decisions are published; family law cases partially redacted'
+    languages:
+      - 'nl'
+
+data_freshness:
+  automated_checks: true
+  check_frequency: 'daily'
+  last_verified: '2026-02-14'
