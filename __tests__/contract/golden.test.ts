@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, rmdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -136,33 +136,37 @@ const isNightly = process.env['CONTRACT_MODE'] === 'nightly';
 let mcpClient: Client;
 let db: InstanceType<typeof Database>;
 
-beforeAll(async () => {
-  const dbPath =
-    process.env['DUTCH_LAW_DB_PATH'] ?? join(__dirname, '..', '..', 'data', 'database.db');
-  db = new Database(dbPath, { readonly: true });
-  db.pragma('journal_mode = WAL', { simple: true });
-
-  const server = new Server(
-    { name: 'dutch-law-test', version: '0.0.0' },
-    { capabilities: { tools: {} } },
-  );
-  registerTools(server, () => db);
-
-  mcpClient = new Client({ name: 'test-client', version: '0.0.0' }, { capabilities: {} });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  await mcpClient.connect(clientTransport);
-  await server.connect(serverTransport);
-});
-
-afterAll(() => {
-  db?.close();
-});
-
 // ---------------------------------------------------------------------------
 // Contract test runner
 // ---------------------------------------------------------------------------
 
 describe(`Contract tests: ${fixture.mcp_name}`, () => {
+  beforeAll(async () => {
+    const dbPath =
+      process.env['DUTCH_LAW_DB_PATH'] ?? join(__dirname, '..', '..', 'data', 'database.db');
+    // node-sqlite3-wasm leaves a .lock dir on close — remove stale lock before opening
+    try {
+      rmdirSync(dbPath + '.lock');
+    } catch {
+      /* ignore */
+    }
+    db = new Database(dbPath, { readonly: true });
+
+    const server = new Server(
+      { name: 'dutch-law-test', version: '0.0.0' },
+      { capabilities: { tools: {} } },
+    );
+    registerTools(server, () => db);
+
+    mcpClient = new Client({ name: 'test-client', version: '0.0.0' }, { capabilities: {} });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await mcpClient.connect(clientTransport);
+  }, 30_000);
+
+  afterAll(() => {
+    db?.close();
+  });
   for (const test of fixture.tests) {
     describe(`[${test.id}] ${test.description}`, () => {
       let result: ToolResult;

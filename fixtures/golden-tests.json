@@ -123,7 +123,7 @@
       },
       "assertions": {
         "result_not_empty": true,
-        "any_result_contains": ["2016/679", "GDPR", "gegevensbescherming", "persoonsgegevens"]
+        "any_result_contains": ["2016/679", "verordening", "gegevensbescherming", "persoonsgegevens"]
       }
     },
     {
