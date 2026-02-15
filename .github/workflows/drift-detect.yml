@@ -1,0 +1,43 @@
+name: Drift Detection
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+
+      - name: Run drift detection
+        id: drift
+        run: npm run drift:detect || echo "drift_detected=true" >> "$GITHUB_OUTPUT"
+        continue-on-error: true
+
+      - name: Create drift issue
+        if: steps.drift.outputs.drift_detected == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Upstream drift detected — ${new Date().toISOString().split('T')[0]}`,
+              body: 'Nightly drift detection found hash mismatches between MCP output and upstream sources.\n\nRun `npm run drift:detect` locally to see details.\n\nSee `fixtures/golden-hashes.json` for anchored provisions.',
+              labels: ['data-drift', 'automated']
+            });

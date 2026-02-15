@@ -17,6 +17,12 @@ on:
   pull_request:
     branches:
       - main
+  schedule:
+    - cron: '0 6 * * 1' # Weekly Monday 06:00 UTC
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -118,3 +124,36 @@ jobs:
 
       - name: Type check
         run: npx tsc --noEmit
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # CONTRACT TESTS (Blueprint §4)
+  # ─────────────────────────────────────────────────────────────────────────
+
+  contract-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - run: npm run test:contract
+
+  contract-tests-nightly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event_name == 'schedule'
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - run: CONTRACT_MODE=nightly npm run test:contract

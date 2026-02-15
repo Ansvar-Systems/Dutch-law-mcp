@@ -21,7 +21,7 @@ name: Publish to npm
 on:
   push:
     tags:
-      - 'v*'  # Trigger on tags like v0.1.0, v1.0.0, etc.
+      - 'v*' # Trigger on tags like v0.1.0, v1.0.0, etc.
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────
@@ -63,8 +63,8 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: read
-      id-token: write  # Required for npm provenance
+      contents: write # Required for GitHub Release SBOM attachment
+      id-token: write # Required for npm provenance
 
     steps:
       - name: Checkout
@@ -90,10 +90,25 @@ jobs:
       # --provenance: Include build provenance (requires id-token permission)
       # ─────────────────────────────────────────────────────────────────────
 
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+
       - name: Publish to npm
         run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Attach SBOM to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: sbom.cdx.json
+          append_body: true
+          body: |
+            ### Supply Chain Artifacts
+            - `sbom.cdx.json` — CycloneDX SBOM for this release
 
   # ─────────────────────────────────────────────────────────────────────────
   # DOCKER JOB (OPTIONAL)
