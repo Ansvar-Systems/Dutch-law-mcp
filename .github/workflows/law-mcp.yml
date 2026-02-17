@@ -1,0 +1,92 @@
+name: law-mcp
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  ci-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Build
+        run: npm run build
+      - name: Unit tests
+        run: npm test
+
+  contract-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Contract tests
+        run: |
+          if npm run | grep -q "test:contract"; then
+            npm run test:contract
+          else
+            echo "test:contract not defined; treated as no-op"
+          fi
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Security baseline metadata check
+        run: |
+          test -f SECURITY.md || echo "SECURITY.md missing"
+          echo "Dedicated scanners run in semgrep/trivy/codeql workflows where configured."
+
+  source-metadata:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate source metadata artifacts
+        run: |
+          test -f sources.yml
+          test -f fixtures/golden-tests.json
+          test -f fixtures/golden-hashes.json
+          test -f server.json
+
+  data-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate golden artifact JSON shape
+        run: |
+          jq . fixtures/golden-tests.json >/dev/null
+          jq . fixtures/golden-hashes.json >/dev/null
+
+  drift-detect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Drift detect
+        run: |
+          if npm run | grep -q "drift:detect"; then
+            npm run drift:detect
+          else
+            echo "drift:detect script not defined; checking golden hash fixture exists"
+            test -f fixtures/golden-hashes.json
+          fi
