@@ -20,6 +20,15 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci --ignore-scripts
+      - name: Prepare test database
+        run: |
+          mkdir -p data
+          if npm run | grep -q "build:db"; then
+            npm run build:db
+          else
+            touch data/database.db
+          fi
+          test -f data/database.db
       - name: Build
         run: npm run build
       - name: Unit tests
@@ -35,6 +44,15 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci --ignore-scripts
+      - name: Prepare test database
+        run: |
+          mkdir -p data
+          if npm run | grep -q "build:db"; then
+            npm run build:db
+          else
+            touch data/database.db
+          fi
+          test -f data/database.db
       - name: Contract tests
         run: |
           if npm run | grep -q "test:contract"; then
