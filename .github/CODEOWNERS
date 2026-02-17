@@ -1,0 +1,7 @@
+# Law MCP ownership
+* @Ansvar-Systems/engineering
+
+# Governance-critical paths
+/.github/workflows/ @Ansvar-Systems/engineering
+/fixtures/ @Ansvar-Systems/engineering
+/sources.yml @Ansvar-Systems/engineering

@@ -1,0 +1,42 @@
+name: Check for Legal Data Updates
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Daily at 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check-updates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - name: Check for updates
+        id: check
+        run: |
+          npm run check-updates 2>&1 | tee update-report.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+        continue-on-error: true
+      - name: Create issue if updates available
+        if: steps.check.outputs.exit_code == '2'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('update-report.txt', 'utf8');
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[Auto] Legal data updates available - ${new Date().toISOString().split('T')[0]}`,
+              body: `## Legal Data Update Report\n\n\`\`\`\n${report}\n\`\`\`\n\nRun \`npm run ingest\` to update the data.\n\n_This issue was created automatically by the check-updates workflow._`,
+              labels: ['data-update', 'automated']
+            });
