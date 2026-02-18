@@ -42,6 +42,25 @@ sources:
     languages:
       - 'nl'
 
+  - name: 'EUR-Lex'
+    authority: 'European Union (Publications Office)'
+    official_portal: 'https://eur-lex.europa.eu'
+    canonical_identifier: 'CELEX (European legislation identifier)'
+    retrieval_method: 'SPARQL + REST API'
+    api_documentation: 'https://eur-lex.europa.eu/content/tools/webservices/SearchWebServiceUserManual_v2.00.pdf'
+    update_frequency: 'manual'
+    last_ingested: '2026-02-10'
+    license_or_terms:
+      type: 'EU Open Data (Decision 2011/833/EU)'
+      url: 'https://eur-lex.europa.eu/content/legal-notice/legal-notice.html'
+      summary: 'EU legislation is public domain; reuse encouraged with source attribution'
+    coverage:
+      scope: 'EU directives and regulations referenced by Dutch statutes (1,008 documents)'
+      limitations: 'Metadata only — full text not stored; links to EUR-Lex for full content'
+    languages:
+      - 'nl'
+      - 'en'
+
 data_freshness:
   automated_checks: true
   check_frequency: 'daily'

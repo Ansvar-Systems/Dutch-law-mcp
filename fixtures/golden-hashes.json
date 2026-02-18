@@ -4,13 +4,14 @@
   "mcp_name": "Dutch Law MCP",
   "jurisdiction": "NL",
   "description": "Drift detection anchors for stable Dutch legal provisions. Constitutional and foundational articles that rarely change.",
+  "computed_at": "2026-02-18",
   "provisions": [
     {
       "id": "nl-hash-001",
       "description": "Grondwet Article 1 — anti-discrimination, fundamental equality",
       "upstream_url": "https://wetten.overheid.nl/BWBR0001840/2023-02-22#Hoofdstuk1_Artikel1",
       "selector_hint": "Article 1",
-      "expected_sha256": "COMPUTE_ON_FIRST_RUN",
+      "expected_sha256": "75c00ffe4e6f39b0bb6c3a538b942dff40b80fe3b237d9b5e6a04b60865747df",
       "expected_snippet": "Allen die zich in Nederland bevinden"
     },
     {
@@ -18,7 +19,7 @@
       "description": "Grondwet Article 23 — freedom of education (onderwijs)",
       "upstream_url": "https://wetten.overheid.nl/BWBR0001840/2023-02-22#Hoofdstuk1_Artikel23",
       "selector_hint": "Article 23",
-      "expected_sha256": "COMPUTE_ON_FIRST_RUN",
+      "expected_sha256": "75c00ffe4e6f39b0bb6c3a538b942dff40b80fe3b237d9b5e6a04b60865747df",
       "expected_snippet": "Het onderwijs is een voorwerp van de aanhoudende zorg der regering"
     },
     {
@@ -26,7 +27,7 @@
       "description": "BW Boek 6 Article 162 — tort law (onrechtmatige daad)",
       "upstream_url": "https://wetten.overheid.nl/BWBR0005289/2024-01-01#Boek6_Titeldeel3_Afdeling1_Artikel162",
       "selector_hint": "Article 6:162",
-      "expected_sha256": "COMPUTE_ON_FIRST_RUN",
+      "expected_sha256": "6a69883857c838af8de98653c4bfa3e225f00cb7ad8fa722ff3ea9f6de8d31c2",
       "expected_snippet": "onrechtmatige daad"
     },
     {
@@ -34,7 +35,7 @@
       "description": "Awb Article 1:1 — definitions (bestuursorgaan)",
       "upstream_url": "https://wetten.overheid.nl/BWBR0005537/2024-01-01#Hoofdstuk1_Titeldeel1.1_Artikel1:1",
       "selector_hint": "Article 1:1",
-      "expected_sha256": "COMPUTE_ON_FIRST_RUN",
+      "expected_sha256": "823138e740c494ef4d8aea2134b5fd33dab0c428c1d11caab7bf5123e6c019ea",
       "expected_snippet": "bestuursorgaan"
     },
     {
@@ -42,7 +43,7 @@
       "description": "Wetboek van Strafvordering Article 1 — legality principle",
       "upstream_url": "https://wetten.overheid.nl/BWBR0001903/2024-01-01#BoekEerste_TiteldeelI_Artikel1",
       "selector_hint": "Article 1",
-      "expected_sha256": "COMPUTE_ON_FIRST_RUN",
+      "expected_sha256": "15d384db1ed33d4f8bbd6e6852f76b9c50d05fdb0858143d6b2fce4f7f74ffc7",
       "expected_snippet": "Strafvordering heeft alleen plaats op de wijze bij de wet voorzien"
     }
   ]

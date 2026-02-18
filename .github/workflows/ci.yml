@@ -78,29 +78,27 @@ jobs:
           path: coverage/
 
   # ─────────────────────────────────────────────────────────────────────────
-  # LINT (OPTIONAL)
-  # ─────────────────────────────────────────────────────────────────────────
-  # Uncomment if you have ESLint configured
+  # LINT
   # ─────────────────────────────────────────────────────────────────────────
 
-  # lint:
-  #   runs-on: ubuntu-latest
-  #
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v4
-  #
-  #     - name: Setup Node.js
-  #       uses: actions/setup-node@v4
-  #       with:
-  #         node-version: '20'
-  #         cache: 'npm'
-  #
-  #     - name: Install dependencies
-  #       run: npm ci --ignore-scripts
-  #
-  #     - name: Lint
-  #       run: npm run lint
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Lint
+        run: npx eslint src/ tests/
 
   # ─────────────────────────────────────────────────────────────────────────
   # TYPE CHECK
@@ -131,23 +129,8 @@ jobs:
 
   contract-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: build
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-      - run: npm ci --ignore-scripts
-      - run: npm run build
-      - run: npm run test:contract
-
-  contract-tests-nightly:
-    runs-on: ubuntu-latest
     timeout-minutes: 15
     if: github.event_name == 'schedule'
-    needs: build
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -156,4 +139,7 @@ jobs:
           cache: 'npm'
       - run: npm ci --ignore-scripts
       - run: npm run build
-      - run: CONTRACT_MODE=nightly npm run test:contract
+      - name: Run contract tests
+        run: npm run test:contract
+      - name: Run nightly contract tests
+        run: CONTRACT_MODE=nightly npm run test:contract

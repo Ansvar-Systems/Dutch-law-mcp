@@ -1,13 +1,17 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import Database from '@ansvar/mcp-sqlite';
+import type Database from '@ansvar/mcp-sqlite';
 import { createTestDatabase, closeTestDatabase } from '../fixtures/test-db.js';
-import { getProvision, type GetProvisionInput } from '../../src/tools/get-provision.js';
+import { getProvision } from '../../src/tools/get-provision.js';
 
 describe('getProvision', () => {
   let db: InstanceType<typeof Database>;
 
-  beforeAll(() => { db = createTestDatabase(); });
-  afterAll(() => { closeTestDatabase(db); });
+  beforeAll(() => {
+    db = createTestDatabase();
+  });
+  afterAll(() => {
+    closeTestDatabase(db);
+  });
 
   it('should return results and metadata', async () => {
     const result = await getProvision(db, { document_id: 'BWBR0005289', provision_ref: '6:162' });
@@ -57,7 +61,7 @@ describe('getProvision', () => {
     });
     // BW 6 has 3 provisions: 6:162, 6:163, 6:174
     expect(result.results).toHaveLength(3);
-    const refs = result.results.map(r => r.provision_ref);
+    const refs = result.results.map((r) => r.provision_ref);
     expect(refs).toContain('6:162');
     expect(refs).toContain('6:163');
     expect(refs).toContain('6:174');

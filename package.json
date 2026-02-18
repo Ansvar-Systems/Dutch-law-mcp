@@ -23,7 +23,7 @@
     "start:http": "node dist/http-server.js",
     "prepare-release": "node scripts/prepare-release.js",
     "test": "vitest run",
-    "test:contract": "vitest run __tests__/contract/",
+    "test:contract": "vitest run --include '__tests__/contract/**/*.test.ts'",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "drift:detect": "tsx scripts/drift-detect.ts",

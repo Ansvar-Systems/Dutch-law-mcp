@@ -47,9 +47,11 @@ src/
 │   ├── search-eu-implementations.ts # search_eu_implementations - Search EU documents
 │   ├── get-provision-eu-basis.ts    # get_provision_eu_basis - EU basis for provision
 │   ├── validate-eu-compliance.ts    # validate_eu_compliance - EU compliance check
-│   └── get-provision-at-date.ts     # get_provision_at_date - Historical versioning
+│   ├── get-provision-at-date.ts     # get_provision_at_date - Historical versioning
+│   └── list-sources.ts             # list_sources - Data provenance metadata
 └── utils/
     ├── fts-query.ts         # FTS5 query builder
+    ├── validate-input.ts    # Runtime input validation
     └── metadata.ts          # Metadata utilities
 
 scripts/
@@ -77,9 +79,9 @@ data/
 └── database.db              # SQLite database (~1GB)
 ```
 
-## MCP Tools (14)
+## MCP Tools (15)
 
-### Core Legal Research Tools (8)
+### Core Legal Research Tools (9)
 
 | Tool                    | Description                                                        |
 | ----------------------- | ------------------------------------------------------------------ |
@@ -91,6 +93,7 @@ data/
 | `build_legal_stance`    | Aggregate citations from statutes, case law, kamerstukken          |
 | `format_citation`       | Format citations (full/short/pinpoint) per Dutch conventions       |
 | `check_currency`        | Check if statute is in force (geldend recht), amended, or repealed |
+| `list_sources`          | List authoritative data sources and provenance metadata            |
 
 ### EU Law Integration Tools (5)
 
@@ -156,45 +159,62 @@ npx @anthropic/mcp-inspector node dist/index.js
 ## Database Schema
 
 ```sql
--- Dutch statutes
-CREATE TABLE statutes (
+-- Legal documents (statutes, AMvBs, ministerial regulations, kamerstukken, case law)
+CREATE TABLE legal_documents (
   id TEXT PRIMARY KEY,          -- BWB-ID (e.g., BWBR0005289)
+  type TEXT NOT NULL,           -- statute|amvb|ministerial_regulation|kamerstuk|case_law
   title TEXT NOT NULL,
+  title_en TEXT,
   short_name TEXT,              -- e.g., "BW", "Sr", "Awb"
-  status TEXT NOT NULL,         -- geldend|ingetrokken|niet_in_werking
-  bwb_id TEXT,
+  status TEXT NOT NULL DEFAULT 'in_force',  -- in_force|amended|repealed|not_yet_in_force
   issued_date TEXT,
   in_force_date TEXT,
   url TEXT,
   description TEXT,
-  last_updated TEXT
+  last_updated TEXT DEFAULT (datetime('now'))
 );
 
 -- Individual provisions (articles)
-CREATE TABLE provisions (
+CREATE TABLE legal_provisions (
   id INTEGER PRIMARY KEY,
-  statute_id TEXT NOT NULL REFERENCES statutes(id),
+  document_id TEXT NOT NULL REFERENCES legal_documents(id),
   provision_ref TEXT NOT NULL,  -- e.g., "6:162", "287"
   book TEXT,
-  title TEXT,
   chapter TEXT,
   section TEXT,
   article TEXT NOT NULL,
+  title TEXT,
   content TEXT NOT NULL,
   metadata TEXT,                -- JSON
-  UNIQUE(statute_id, provision_ref)
+  UNIQUE(document_id, provision_ref)
+);
+
+-- Historical provision versions (for get_provision_at_date)
+CREATE TABLE legal_provision_versions (
+  id INTEGER PRIMARY KEY,
+  document_id TEXT,
+  provision_ref TEXT,
+  book TEXT, chapter TEXT, section TEXT,
+  article TEXT NOT NULL,
+  title TEXT,
+  content TEXT NOT NULL,
+  metadata TEXT,
+  valid_from TEXT,
+  valid_to TEXT
 );
 
 -- Court decisions
 CREATE TABLE case_law (
-  id TEXT PRIMARY KEY,          -- ECLI identifier
+  id INTEGER PRIMARY KEY,
+  document_id TEXT NOT NULL UNIQUE REFERENCES legal_documents(id),
   court TEXT NOT NULL,
-  date TEXT,
-  domain TEXT,
+  ecli TEXT UNIQUE,
+  case_number TEXT,
+  decision_date TEXT,
+  procedure_type TEXT,
+  legal_domain TEXT,
   summary TEXT,
-  full_text TEXT,
-  url TEXT,
-  metadata TEXT
+  keywords TEXT
 );
 
 -- EU directives and regulations
@@ -217,8 +237,8 @@ CREATE TABLE eu_documents (
 -- Dutch -> EU cross-references
 CREATE TABLE eu_references (
   id INTEGER PRIMARY KEY,
-  statute_id TEXT NOT NULL REFERENCES statutes(id),
-  provision_id INTEGER REFERENCES provisions(id),
+  statute_id TEXT NOT NULL REFERENCES legal_documents(id),
+  provision_id INTEGER REFERENCES legal_provisions(id),
   eu_document_id TEXT NOT NULL REFERENCES eu_documents(id),
   eu_article TEXT,
   reference_type TEXT,          -- "implements", "supplements", "applies"
@@ -228,10 +248,11 @@ CREATE TABLE eu_references (
 );
 
 -- FTS5 indexes (content-synced with triggers)
-CREATE VIRTUAL TABLE provisions_fts USING fts5(...);
-CREATE VIRTUAL TABLE case_law_fts USING fts5(...);
-CREATE VIRTUAL TABLE prep_works_fts USING fts5(...);
-CREATE VIRTUAL TABLE definitions_fts USING fts5(...);
+CREATE VIRTUAL TABLE provisions_fts USING fts5(..., tokenize='unicode61');
+CREATE VIRTUAL TABLE provision_versions_fts USING fts5(..., tokenize='unicode61');
+CREATE VIRTUAL TABLE case_law_fts USING fts5(..., tokenize='unicode61');
+CREATE VIRTUAL TABLE prep_works_fts USING fts5(..., tokenize='unicode61');
+CREATE VIRTUAL TABLE definitions_fts USING fts5(..., tokenize='unicode61');
 
 -- Preparatory works, cross-references, definitions
 -- See scripts/build-db.ts for full schema
@@ -269,7 +290,7 @@ describe('search_legislation', () => {
 - **EU Documents:** 1,008 (500 directives, 487 regulations, 21 referenced)
 - **Definitions:** 64 extracted legal terms
 - **Database Size:** ~1 GB
-- **MCP Tools:** 14 (8 core + 5 EU + 1 historical)
+- **MCP Tools:** 15 (9 core + 5 EU + 1 historical)
 
 ## Resources
 

@@ -30,6 +30,8 @@ import {
 import { getProvisionEUBasis, type GetProvisionEUBasisInput } from './get-provision-eu-basis.js';
 import { validateEUCompliance, type ValidateEUComplianceInput } from './validate-eu-compliance.js';
 import { getProvisionAtDate, type GetProvisionAtDateInput } from './get-provision-at-date.js';
+import { listSources, type ListSourcesInput } from './list-sources.js';
+import { validateInput, COMMON_FIELDS } from '../utils/validate-input.js';
 
 const READ_ONLY_ANNOTATIONS = {
   readOnlyHint: true,
@@ -62,21 +64,36 @@ export const TOOLS: Tool[] = [
   {
     name: 'search_legislation',
     description:
-      'Search Dutch statutes and regulations by keyword. Searches FTS-indexed provisions from wetten.overheid.nl (BWB). Use document_id (BWB-ID like "BWBR0005289") to narrow to a specific statute. Supports temporal queries via as_of_date.',
+      'Search Dutch statutes and regulations by keyword using full-text search (FTS5 with BM25 ranking). Data sourced from wetten.overheid.nl (BWB). Returns matching provisions with article text, statute title, and BWB-ID. Use document_id to narrow to a specific statute. Use as_of_date to query historical versions. Returns empty array (not error) when no results match. Use get_provision instead when you already know the exact BWB-ID and article number.',
     inputSchema: {
       type: 'object' as const,
       properties: {
-        query: { type: 'string', description: 'Search terms (Dutch or English)' },
+        query: {
+          type: 'string',
+          description:
+            'Search terms in Dutch or English. Examples: "onrechtmatige daad", "arbeidsovereenkomst", "privacy". Multi-word queries use AND logic with OR fallback.',
+        },
         document_id: {
           type: 'string',
-          description: 'BWB-ID to restrict search to a specific statute (e.g. "BWBR0005289")',
+          description:
+            'BWB-ID to restrict search to a specific statute (e.g. "BWBR0005289" for Burgerlijk Wetboek)',
         },
-        status: { type: 'string', description: 'Filter by status: in_force, repealed, amended' },
+        status: {
+          type: 'string',
+          description:
+            'Filter by status: in_force (geldend), repealed (ingetrokken), amended (gewijzigd)',
+          enum: ['in_force', 'repealed', 'amended'],
+        },
         as_of_date: {
           type: 'string',
-          description: 'ISO date to query historical versions (e.g. "2020-01-01")',
+          description: 'ISO date (YYYY-MM-DD) to query historical versions of provisions',
         },
-        limit: { type: 'number', description: 'Max results (1-50, default 10)' },
+        limit: {
+          type: 'number',
+          description: 'Max results (1-50, default 10). Higher values use more tokens.',
+          minimum: 1,
+          maximum: 50,
+        },
       },
       required: ['query'],
     },
@@ -84,7 +101,7 @@ export const TOOLS: Tool[] = [
   {
     name: 'get_provision',
     description:
-      'Retrieve a specific provision from a Dutch statute using BWB-ID and article reference. Examples: document_id="BWBR0005289", book="6", article="162" for Art. 6:162 BW (onrechtmatige daad). document_id="BWBR0001854", article="287" for Art. 287 Sr (doodslag). Can also use provision_ref directly (e.g. "6:162").',
+      'Retrieve a specific provision (article) from a Dutch statute by BWB-ID. Returns the full article text, metadata, and source URL. If no article is specified, returns all provisions of the statute (use with care — large statutes may have 100+ articles). Examples: document_id="BWBR0005289", book="6", article="162" for Art. 6:162 BW; document_id="BWBR0001854", article="287" for Art. 287 Sr. Use search_legislation if you don\'t know the BWB-ID. Use get_provision_at_date if you need a historical version.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -106,7 +123,7 @@ export const TOOLS: Tool[] = [
   {
     name: 'search_case_law',
     description:
-      'Search Dutch court decisions from rechtspraak.nl. Supports full-text search with optional filters for court (e.g. HR, RVS, RBAMS), legal domain, procedure type, and date range. Use ecli for direct ECLI lookup (e.g. "ECLI:NL:HR:2019:376").',
+      'Search Dutch court decisions from rechtspraak.nl (202K+ decisions). Returns ECLI identifier, court, date, summary, and keywords. Supports FTS search with filters for court, legal domain, procedure type, and date range. For direct ECLI lookup, use the ecli parameter instead of query. Note: case law is only available in the professional tier — free tier returns an upgrade notice. Returns empty array when no results match.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -135,7 +152,7 @@ export const TOOLS: Tool[] = [
   {
     name: 'get_preparatory_works',
     description:
-      'Get preparatory works (kamerstukken) for a Dutch statute. Returns related parliamentary documents such as memorie van toelichting (MvT), memorie van antwoord (MvA), nota naar aanleiding van het verslag, and other travaux preparatoires.',
+      'Get preparatory works (kamerstukken/travaux preparatoires) for a Dutch statute. Returns parliamentary documents: memorie van toelichting (MvT), memorie van antwoord (MvA), nota naar aanleiding van het verslag, and amendments. Professional tier only — free tier returns an upgrade notice. Use when you need legislative intent or historical context for a statute.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -152,7 +169,7 @@ export const TOOLS: Tool[] = [
   {
     name: 'validate_citation',
     description:
-      'Validate a Dutch legal citation and check whether the referenced document and provision exist in the database. Supported formats: "Art. 6:162 BW", "art. 287 Sr", "ECLI:NL:HR:2019:376", "Kamerstukken II 2020/21, 35815, nr. 2".',
+      'Validate a Dutch legal citation against the database — checks whether the referenced document and provision actually exist. Use this to verify citations before including them in legal analysis (zero-hallucination check). Supported formats: "Art. 6:162 BW", "art. 287 Sr", "ECLI:NL:HR:2019:376", "Kamerstukken II 2020/21, 35815, nr. 2". Returns validation status with details on what was/wasn\'t found. Use format_citation instead if you just need to format a citation string.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -164,7 +181,7 @@ export const TOOLS: Tool[] = [
   {
     name: 'build_legal_stance',
     description:
-      'Build a comprehensive legal stance on a topic by combining statute provisions, case law, preparatory works (kamerstukken), and cross-references. Returns a structured research bundle for Dutch law analysis.',
+      'Build a comprehensive legal stance on a topic by aggregating statute provisions, case law, preparatory works, and cross-references into a single structured response. Best for broad legal research questions. Gracefully degrades on free tier (omits case law and preparatory works). Use search_legislation or get_provision for targeted single-source queries instead.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -179,7 +196,7 @@ export const TOOLS: Tool[] = [
   {
     name: 'format_citation',
     description:
-      'Format a Dutch legal citation into the standard format. Outputs proper Dutch citation format, e.g. "Art. 6:162 lid 2 Burgerlijk Wetboek Boek 6". Supports full, short, and pinpoint formats.',
+      'Format a Dutch legal citation string into standard Dutch legal citation format. Pure formatting — no database lookup, no validation. Supports full (formal), short (abbreviated), and pinpoint (with subsection) formats. Use validate_citation instead if you need to verify the citation actually exists.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -196,7 +213,7 @@ export const TOOLS: Tool[] = [
   {
     name: 'check_currency',
     description:
-      'Check whether a Dutch statute or provision is currently in force (geldend recht). Returns the document status (in_force / repealed / not_yet_in_force), in-force date, repeal date, provision version validity, and any warnings about outdated or ingetrokken (withdrawn) legislation.',
+      'Check whether a Dutch statute or provision is currently in force (geldend recht). Returns status (in_force/repealed/not_yet_in_force), in-force date, and any warnings. Essential before relying on a provision — always check currency for legal advice. Optionally checks a specific provision and date. Also returns related case law cross-references when available.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -216,7 +233,7 @@ export const TOOLS: Tool[] = [
   {
     name: 'get_eu_basis',
     description:
-      'Get the EU legal basis for a Dutch statute. Shows which EU directives and regulations the statute implements or references. Returns CELEX numbers, EUR-Lex links, and reference types.',
+      'Get the EU legal basis (directives/regulations) for a Dutch statute. Returns CELEX numbers, EUR-Lex links, reference types (implements/references/supplements), and whether it is a primary implementation. Use get_provision_eu_basis for provision-level EU references. Use get_dutch_implementations for the reverse lookup (EU act → Dutch laws).',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -240,7 +257,7 @@ export const TOOLS: Tool[] = [
   {
     name: 'get_dutch_implementations',
     description:
-      'Get Dutch statutes that implement a given EU directive or regulation. Returns a list of BWB statutes with their implementation status, showing which Dutch laws transpose the EU instrument into national law.',
+      'Reverse EU lookup: find which Dutch statutes implement a given EU directive or regulation. Returns BWB-IDs, statute titles, and implementation status. Use get_eu_basis for the forward lookup (Dutch law → EU basis). The eu_document_id format is "directive:YYYY/NNN" or "regulation:YYYY/NNN" (e.g. "directive:2016/679" for GDPR).',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -263,7 +280,7 @@ export const TOOLS: Tool[] = [
   {
     name: 'search_eu_implementations',
     description:
-      'Search EU directives and regulations with optional filters. Shows which EU instruments have been implemented in Dutch law and which ones are pending implementation.',
+      'Search EU directives and regulations in the database (1,008 documents). Returns EU document metadata with Dutch implementation counts. Filter by type (directive/regulation), year range, community (EU/EG/EEG), and whether a Dutch implementation exists. Use when browsing EU instruments rather than looking up a specific one.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -292,7 +309,7 @@ export const TOOLS: Tool[] = [
   {
     name: 'get_provision_eu_basis',
     description:
-      'Get EU references for a specific provision in a Dutch statute. Shows which EU articles are referenced or implemented by a particular Dutch provision.',
+      'Get EU references for a specific provision (article) in a Dutch statute. Shows which EU directive/regulation articles are referenced or implemented by that Dutch provision. More granular than get_eu_basis (which works at statute level). Returns empty results if no EU references exist for that provision.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -308,7 +325,7 @@ export const TOOLS: Tool[] = [
   {
     name: 'validate_eu_compliance',
     description:
-      'Validate EU compliance for a Dutch statute or provision. Checks for missing, partial, or outdated implementations and returns compliance issues with severity levels and recommendations (in Dutch).',
+      'Validate EU compliance for a Dutch statute. Checks for missing, partial, or outdated implementations of EU directives/regulations. Returns compliance issues with severity levels (high/medium/low) and recommendations in Dutch. Optionally narrow to a specific provision or EU document. Use get_eu_basis first to see what EU instruments apply.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -325,7 +342,7 @@ export const TOOLS: Tool[] = [
   {
     name: 'get_provision_at_date',
     description:
-      'Retrieve a specific provision from a Dutch statute as it was at a given date. Uses the provision version history to return the text valid at the specified date. Supports amendment tracking.',
+      'Retrieve a provision as it was at a specific historical date. Uses version history to return the text valid at that date. Essential for analyzing past legal situations or tracking how a provision changed over time. Set include_amendments=true to see the full amendment chain. Returns not_found if no version exists for that date. Use get_provision for the current version instead.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -341,6 +358,21 @@ export const TOOLS: Tool[] = [
         },
       },
       required: ['document_id', 'provision_ref', 'date'],
+    },
+  },
+  {
+    name: 'list_sources',
+    description:
+      'List the authoritative data sources backing this server. Returns provenance metadata for each source (wetten.overheid.nl, rechtspraak.nl, EUR-Lex) including coverage, licensing, freshness, and update frequency. Use this tool to verify data origin and understand what data is available. Set include_stats=true to get row counts per table.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        include_stats: {
+          type: 'boolean',
+          description: 'Include database statistics (row counts per table). Default false.',
+        },
+      },
+      required: [],
     },
   },
 ];
@@ -369,58 +401,79 @@ export function registerTools(server: Server, getDb: () => InstanceType<typeof D
 
     try {
       let result: unknown;
+      const a = args ?? {};
 
       switch (name) {
         case 'search_legislation':
-          result = await searchLegislation(getDb(), args as unknown as SearchLegislationInput);
+          validateInput(name, a, [COMMON_FIELDS.query(), COMMON_FIELDS.limit]);
+          result = await searchLegislation(getDb(), a as unknown as SearchLegislationInput);
           break;
         case 'get_provision':
-          result = await getProvision(getDb(), args as unknown as GetProvisionInput);
+          validateInput(name, a, [COMMON_FIELDS.document_id()]);
+          result = await getProvision(getDb(), a as unknown as GetProvisionInput);
           break;
         case 'search_case_law':
-          result = await searchCaseLaw(getDb(), args as unknown as SearchCaseLawInput);
+          result = await searchCaseLaw(getDb(), a as unknown as SearchCaseLawInput);
           break;
         case 'get_preparatory_works':
-          result = await getPreparatoryWorks(getDb(), args as unknown as GetPreparatoryWorksInput);
+          validateInput(name, a, [
+            { name: 'statute_id', type: 'string', required: true, maxLength: 50 },
+          ]);
+          result = await getPreparatoryWorks(getDb(), a as unknown as GetPreparatoryWorksInput);
           break;
         case 'validate_citation':
-          result = await validateCitationTool(getDb(), args as unknown as ValidateCitationInput);
+          validateInput(name, a, [COMMON_FIELDS.citation()]);
+          result = await validateCitationTool(getDb(), a as unknown as ValidateCitationInput);
           break;
         case 'build_legal_stance':
-          result = await buildLegalStance(getDb(), args as unknown as BuildLegalStanceInput);
+          validateInput(name, a, [COMMON_FIELDS.query()]);
+          result = await buildLegalStance(getDb(), a as unknown as BuildLegalStanceInput);
           break;
         case 'format_citation':
-          result = await formatCitationTool(args as unknown as FormatCitationInput);
+          validateInput(name, a, [COMMON_FIELDS.citation()]);
+          result = await formatCitationTool(a as unknown as FormatCitationInput);
           break;
         case 'check_currency':
-          result = await checkCurrency(getDb(), args as unknown as CheckCurrencyInput);
+          validateInput(name, a, [COMMON_FIELDS.document_id()]);
+          result = await checkCurrency(getDb(), a as unknown as CheckCurrencyInput);
           break;
         case 'get_eu_basis':
-          result = await getEUBasis(getDb(), args as unknown as GetEUBasisInput);
+          validateInput(name, a, [COMMON_FIELDS.document_id()]);
+          result = await getEUBasis(getDb(), a as unknown as GetEUBasisInput);
           break;
         case 'get_dutch_implementations':
+          validateInput(name, a, [
+            { name: 'eu_document_id', type: 'string', required: true, maxLength: 100 },
+          ]);
           result = await getDutchImplementations(
             getDb(),
-            args as unknown as GetDutchImplementationsInput,
+            a as unknown as GetDutchImplementationsInput,
           );
           break;
         case 'search_eu_implementations':
           result = await searchEUImplementations(
             getDb(),
-            args as unknown as SearchEUImplementationsInput,
+            a as unknown as SearchEUImplementationsInput,
           );
           break;
         case 'get_provision_eu_basis':
-          result = await getProvisionEUBasis(getDb(), args as unknown as GetProvisionEUBasisInput);
+          validateInput(name, a, [COMMON_FIELDS.document_id(), COMMON_FIELDS.provision_ref()]);
+          result = await getProvisionEUBasis(getDb(), a as unknown as GetProvisionEUBasisInput);
           break;
         case 'validate_eu_compliance':
-          result = await validateEUCompliance(
-            getDb(),
-            args as unknown as ValidateEUComplianceInput,
-          );
+          validateInput(name, a, [COMMON_FIELDS.document_id()]);
+          result = await validateEUCompliance(getDb(), a as unknown as ValidateEUComplianceInput);
           break;
         case 'get_provision_at_date':
-          result = await getProvisionAtDate(getDb(), args as unknown as GetProvisionAtDateInput);
+          validateInput(name, a, [
+            COMMON_FIELDS.document_id(),
+            COMMON_FIELDS.provision_ref(),
+            { name: 'date', type: 'string', required: true, maxLength: 10 },
+          ]);
+          result = await getProvisionAtDate(getDb(), a as unknown as GetProvisionAtDateInput);
+          break;
+        case 'list_sources':
+          result = await listSources(getDb(), a as unknown as ListSourcesInput);
           break;
         default:
           return {

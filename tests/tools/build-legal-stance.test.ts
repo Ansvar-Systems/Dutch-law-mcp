@@ -1,13 +1,17 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import Database from '@ansvar/mcp-sqlite';
+import type Database from '@ansvar/mcp-sqlite';
 import { createTestDatabase, closeTestDatabase } from '../fixtures/test-db.js';
-import { buildLegalStance, type BuildLegalStanceInput } from '../../src/tools/build-legal-stance.js';
+import { buildLegalStance } from '../../src/tools/build-legal-stance.js';
 
 describe('buildLegalStance', () => {
   let db: InstanceType<typeof Database>;
 
-  beforeAll(() => { db = createTestDatabase(); });
-  afterAll(() => { closeTestDatabase(db); });
+  beforeAll(() => {
+    db = createTestDatabase();
+  });
+  afterAll(() => {
+    closeTestDatabase(db);
+  });
 
   it('should return results and metadata', async () => {
     const result = await buildLegalStance(db, { query: 'onrechtmatige daad' });
@@ -31,7 +35,7 @@ describe('buildLegalStance', () => {
   it('should include preparatory works when available', async () => {
     // Search for something in UAVG which has preparatory works
     const result = await buildLegalStance(db, { query: 'persoonsgegevens verordening' });
-    if (result.results.provisions.some(p => p.document_id === 'BWBR0042124')) {
+    if (result.results.provisions.some((p) => p.document_id === 'BWBR0042124')) {
       expect(result.results.preparatory_works.length).toBeGreaterThan(0);
     }
   });

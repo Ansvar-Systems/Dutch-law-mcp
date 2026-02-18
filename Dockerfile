@@ -36,7 +36,7 @@ LABEL org.opencontainers.image.vendor="Ansvar Systems AB"
 LABEL org.opencontainers.image.source="https://github.com/Ansvar-Systems/Dutch-law-mcp"
 LABEL org.opencontainers.image.documentation="https://github.com/Ansvar-Systems/Dutch-law-mcp#readme"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
-LABEL org.opencontainers.image.version="1.0.0"
+LABEL org.opencontainers.image.version="1.2.1"
 
 # Install curl for HTTP health checks
 RUN apk add --no-cache curl
