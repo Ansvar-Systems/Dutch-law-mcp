@@ -33,12 +33,18 @@ const __dirname = path.dirname(__filename);
 /** Package-relative database path (works when installed or in Docker) */
 const PACKAGE_DB_PATH = path.resolve(__dirname, '../../data/database.db');
 
+/** Semver-safe pattern: only allow digits, dots, hyphens, and "latest". */
+const SAFE_VERSION_RE = /^[0-9]+\.[0-9]+\.[0-9]+(?:-[\w.]+)?$/;
+
 /** Read version from package.json at build time — falls back to "latest" */
 function getVersion(): string {
   try {
     const pkgPath = path.resolve(__dirname, '../../package.json');
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) as { version?: string };
-    return pkg.version ?? 'latest';
+    const ver = pkg.version ?? 'latest';
+    // Validate version to prevent URL injection from tampered package.json
+    if (ver !== 'latest' && !SAFE_VERSION_RE.test(ver)) return 'latest';
+    return ver;
   } catch {
     return 'latest';
   }

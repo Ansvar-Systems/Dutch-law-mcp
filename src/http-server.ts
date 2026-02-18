@@ -55,15 +55,25 @@ interface SessionEntry {
   lastActivity: number;
 }
 
-const sessions: Record<string, SessionEntry> = {};
+// Use Map instead of plain object to prevent prototype pollution via session IDs
+const sessions = new Map<string, SessionEntry>();
+
+/** UUID v4 pattern for validating session IDs (prevents injection). */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** Validate and return a safe session ID, or undefined if invalid. */
+function safeSessionId(raw: string | undefined): string | undefined {
+  if (!raw || !UUID_RE.test(raw)) return undefined;
+  return raw;
+}
 
 /** Evict expired sessions to prevent unbounded memory growth. */
 function evictStaleSessions(): void {
   const now = Date.now();
-  for (const [sid, entry] of Object.entries(sessions)) {
+  for (const [sid, entry] of sessions) {
     if (now - entry.lastActivity > SESSION_TTL_MS) {
       entry.transport.close().catch(() => {});
-      delete sessions[sid];
+      sessions.delete(sid);
       console.error(`[${SERVER_NAME}] Session ${sid} expired (TTL)`);
     }
   }
@@ -134,12 +144,13 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
 
   // GET /mcp — metadata or SSE stream
   if (url.pathname === '/mcp' && method === 'GET') {
-    const sessionId = req.headers['mcp-session-id'] as string | undefined;
+    const sessionId = safeSessionId(req.headers['mcp-session-id'] as string | undefined);
+    const session = sessionId ? sessions.get(sessionId) : undefined;
 
-    if (sessionId && sessions[sessionId]) {
+    if (session) {
       // Existing session — handle as SSE stream for server-initiated messages
-      sessions[sessionId].lastActivity = Date.now();
-      await sessions[sessionId].transport.handleRequest(req, res);
+      session.lastActivity = Date.now();
+      await session.transport.handleRequest(req, res);
       return;
     }
 
@@ -171,12 +182,13 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       return;
     }
 
-    const sessionId = req.headers['mcp-session-id'] as string | undefined;
+    const sessionId = safeSessionId(req.headers['mcp-session-id'] as string | undefined);
+    const existingSession = sessionId ? sessions.get(sessionId) : undefined;
 
-    if (sessionId && sessions[sessionId]) {
+    if (existingSession) {
       // Existing session — delegate to its transport
-      sessions[sessionId].lastActivity = Date.now();
-      await sessions[sessionId].transport.handleRequest(req, res, parsed);
+      existingSession.lastActivity = Date.now();
+      await existingSession.transport.handleRequest(req, res, parsed);
       return;
     }
 
@@ -197,9 +209,9 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     }
 
     // Enforce max sessions
-    if (Object.keys(sessions).length >= MAX_SESSIONS) {
+    if (sessions.size >= MAX_SESSIONS) {
       evictStaleSessions();
-      if (Object.keys(sessions).length >= MAX_SESSIONS) {
+      if (sessions.size >= MAX_SESSIONS) {
         res.writeHead(503, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Too many active sessions. Try again later.' }));
         return;
@@ -214,8 +226,8 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     const server = createServer(getDb);
     transport.onclose = () => {
       const sid = transport.sessionId;
-      if (sid && sessions[sid]) {
-        delete sessions[sid];
+      if (sid && sessions.has(sid)) {
+        sessions.delete(sid);
         console.error(`[${SERVER_NAME}] Session ${sid} closed`);
       }
       server.close().catch(() => {});
@@ -225,7 +237,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
 
     // Store the session after connection
     if (transport.sessionId) {
-      sessions[transport.sessionId] = { transport, lastActivity: Date.now() };
+      sessions.set(transport.sessionId, { transport, lastActivity: Date.now() });
     }
 
     await transport.handleRequest(req, res, parsed);
@@ -234,10 +246,11 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
 
   // DELETE /mcp — session termination
   if (url.pathname === '/mcp' && method === 'DELETE') {
-    const sessionId = req.headers['mcp-session-id'] as string | undefined;
-    if (sessionId && sessions[sessionId]) {
-      await sessions[sessionId].transport.close();
-      delete sessions[sessionId];
+    const sessionId = safeSessionId(req.headers['mcp-session-id'] as string | undefined);
+    const sessionToClose = sessionId ? sessions.get(sessionId) : undefined;
+    if (sessionToClose) {
+      await sessionToClose.transport.close();
+      sessions.delete(sessionId!);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ status: 'session closed' }));
     } else {
@@ -285,10 +298,10 @@ async function main(): Promise<void> {
     clearInterval(evictionInterval);
 
     // Close all active sessions
-    for (const [sid, entry] of Object.entries(sessions)) {
+    for (const [, entry] of sessions) {
       entry.transport.close().catch(() => {});
-      delete sessions[sid];
     }
+    sessions.clear();
 
     if (dbInstance) {
       dbInstance.close();
