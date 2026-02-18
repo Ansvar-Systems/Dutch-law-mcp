@@ -92,7 +92,7 @@ export function createServer(getDbFn: () => InstanceType<typeof Database>): Serv
     },
   );
 
-  // Register all 14 MCP tools
+  // Register all 15 MCP tools
   registerTools(server, getDbFn);
 
   // Resources

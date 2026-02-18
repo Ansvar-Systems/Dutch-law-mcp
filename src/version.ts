@@ -19,7 +19,7 @@ function loadVersion(): string {
     return pkg.version ?? '0.0.0';
   } catch {
     // Fallback for bundled environments where package.json path differs
-    return '1.2.1';
+    return process.env.npm_package_version ?? '0.0.0';
   }
 }
 
