@@ -9,6 +9,7 @@ This is an MCP server providing Dutch legal research tools — searching statute
 **Core principle: Verified data only** — the server NEVER generates citations, only returns data verified against authoritative Dutch legal sources (wetten.overheid.nl, rechtspraak.nl). All database entries are validated during ingestion.
 
 **Data Sources:**
+
 - wetten.overheid.nl — Official Basiswettenbestand (BWB) for Dutch statutes
 - rechtspraak.nl — Open Data Rechtspraak for court decisions
 - EUR-Lex — Official EU legislation database (metadata)
@@ -80,36 +81,37 @@ data/
 
 ### Core Legal Research Tools (8)
 
-| Tool | Description |
-|------|-------------|
-| `search_legislation` | FTS5 search on provision text with BM25 ranking |
-| `get_provision` | Retrieve specific provision by BWB-ID and article reference |
-| `search_case_law` | FTS5 search on case law with court/date/domain filters |
-| `get_preparatory_works` | Get linked kamerstukken for a statute |
-| `validate_citation` | Validate citation against database (verification check) |
-| `build_legal_stance` | Aggregate citations from statutes, case law, kamerstukken |
-| `format_citation` | Format citations (full/short/pinpoint) per Dutch conventions |
-| `check_currency` | Check if statute is in force (geldend recht), amended, or repealed |
+| Tool                    | Description                                                        |
+| ----------------------- | ------------------------------------------------------------------ |
+| `search_legislation`    | FTS5 search on provision text with BM25 ranking                    |
+| `get_provision`         | Retrieve specific provision by BWB-ID and article reference        |
+| `search_case_law`       | FTS5 search on case law with court/date/domain filters             |
+| `get_preparatory_works` | Get linked kamerstukken for a statute                              |
+| `validate_citation`     | Validate citation against database (verification check)            |
+| `build_legal_stance`    | Aggregate citations from statutes, case law, kamerstukken          |
+| `format_citation`       | Format citations (full/short/pinpoint) per Dutch conventions       |
+| `check_currency`        | Check if statute is in force (geldend recht), amended, or repealed |
 
 ### EU Law Integration Tools (5)
 
-| Tool | Description |
-|------|-------------|
-| `get_eu_basis` | Get EU directives/regulations for Dutch statute |
-| `get_dutch_implementations` | Find Dutch laws implementing EU act |
+| Tool                        | Description                                          |
+| --------------------------- | ---------------------------------------------------- |
+| `get_eu_basis`              | Get EU directives/regulations for Dutch statute      |
+| `get_dutch_implementations` | Find Dutch laws implementing EU act                  |
 | `search_eu_implementations` | Search EU documents with Dutch implementation counts |
-| `get_provision_eu_basis` | Get EU law references for specific provision |
-| `validate_eu_compliance` | Check implementation status |
+| `get_provision_eu_basis`    | Get EU law references for specific provision         |
+| `validate_eu_compliance`    | Check implementation status                          |
 
 ### Historical Versioning (1)
 
-| Tool | Description |
-|------|-------------|
+| Tool                    | Description                                  |
+| ----------------------- | -------------------------------------------- |
 | `get_provision_at_date` | Retrieve provision as it was at a given date |
 
 ## Dutch Law Structure
 
 Dutch statutes follow this structure:
+
 - **BWB-ID**: Unique identifier, e.g., "BWBR0005289" (Burgerlijk Wetboek)
 - **Books** (Boeken): Major divisions in code-style statutes (BW has Books 1-10)
 - **Titles** (Titels): Subdivisions within books
@@ -118,6 +120,7 @@ Dutch statutes follow this structure:
 - **Paragraphs** (Leden): Within articles, numbered 1, 2, 3...
 
 Citation formats:
+
 - Statute articles: `Art. 6:162 BW`, `art. 287 Sr`, `art. 8:1 Awb`
 - ECLI references: `ECLI:NL:HR:2019:376`
 - Kamerstukken: `Kamerstukken II 2020/21, 35815, nr. 2`
@@ -243,8 +246,12 @@ import { createTestDatabase, closeTestDatabase } from '../fixtures/test-db.js';
 
 describe('search_legislation', () => {
   let db: Database;
-  beforeAll(() => { db = createTestDatabase(); });
-  afterAll(() => { closeTestDatabase(db); });
+  beforeAll(() => {
+    db = createTestDatabase();
+  });
+  afterAll(() => {
+    closeTestDatabase(db);
+  });
 
   it('should find BW provisions', async () => {
     const result = await searchLegislation(db, { query: 'onrechtmatige daad' });
@@ -270,3 +277,9 @@ describe('search_legislation', () => {
 - [rechtspraak.nl](https://uitspraken.rechtspraak.nl/) - Open Data Rechtspraak
 - [EUR-Lex](https://eur-lex.europa.eu/) - Official EU legislation
 - [Overheid.nl](https://www.overheid.nl/) - Dutch government information
+
+## Git Workflow
+
+- **Never commit directly to `main`.** Always create a feature branch and open a Pull Request.
+- Branch protection requires: verified signatures, PR review, and status checks to pass.
+- Use conventional commit prefixes: `feat:`, `fix:`, `chore:`, `docs:`, etc.
