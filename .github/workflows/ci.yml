@@ -98,7 +98,7 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Lint
-        run: npm run lint
+        run: npx eslint src/ tests/
 
   # ─────────────────────────────────────────────────────────────────────────
   # TYPE CHECK
