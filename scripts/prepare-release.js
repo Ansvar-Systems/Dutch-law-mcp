@@ -11,7 +11,7 @@
  *   gh release upload v1.0.0 data/database.db.gz
  */
 
-import { createReadStream, createWriteStream, statSync } from 'fs';
+import { createReadStream, createWriteStream, readFileSync, writeFileSync, statSync } from 'fs';
 import { createGzip } from 'zlib';
 import { pipeline } from 'stream/promises';
 import { resolve, dirname } from 'path';
@@ -27,7 +27,37 @@ function formatBytes(bytes) {
   return `${(bytes / 1024).toFixed(0)} KB`;
 }
 
+function syncVersions() {
+  const pkgPath = resolve(__dirname, '../package.json');
+  const serverJsonPath = resolve(__dirname, '../server.json');
+  const dockerfilePath = resolve(__dirname, '../Dockerfile');
+
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+  const version = pkg.version;
+
+  // Sync server.json
+  const serverJson = JSON.parse(readFileSync(serverJsonPath, 'utf-8'));
+  serverJson.version = version;
+  if (serverJson.packages) {
+    for (const p of serverJson.packages) p.version = version;
+  }
+  writeFileSync(serverJsonPath, JSON.stringify(serverJson, null, 2) + '\n');
+  console.log(`  server.json → ${version}`);
+
+  // Sync Dockerfile label
+  const dockerfile = readFileSync(dockerfilePath, 'utf-8');
+  const updated = dockerfile.replace(
+    /org\.opencontainers\.image\.version="[^"]*"/,
+    `org.opencontainers.image.version="${version}"`,
+  );
+  writeFileSync(dockerfilePath, updated);
+  console.log(`  Dockerfile label → ${version}`);
+}
+
 async function main() {
+  console.log('Syncing versions from package.json...');
+  syncVersions();
+  console.log();
   console.log(`Compressing ${DB_PATH}...`);
 
   const inputSize = statSync(DB_PATH).size;

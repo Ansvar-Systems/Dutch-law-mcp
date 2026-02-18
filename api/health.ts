@@ -1,7 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { SERVER_NAME, SERVER_VERSION } from '../src/version.js';
 
-const SERVER_NAME = 'dutch-legal-citations';
-const SERVER_VERSION = '1.2.0';
 const REPO_URL = 'https://github.com/Ansvar-Systems/Dutch-law-mcp';
 const FRESHNESS_MAX_DAYS = 30;
 

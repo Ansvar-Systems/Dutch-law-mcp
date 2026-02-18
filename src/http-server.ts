@@ -4,7 +4,7 @@
  * HTTP entry point for the Dutch Law MCP server.
  *
  * Endpoints:
- *   GET  /health  → { status: "healthy" }
+ *   GET  /health  → { status: "ok", server, version, uptime_seconds, capabilities, tier }
  *   GET  /mcp     → server metadata JSON
  *   POST /mcp     → MCP protocol (Streamable HTTP transport)
  *   DELETE /mcp   → session termination
@@ -16,7 +16,7 @@
 
 import * as http from 'http';
 import { randomUUID } from 'crypto';
-import Database from '@ansvar/mcp-sqlite';
+import type Database from '@ansvar/mcp-sqlite';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 
@@ -47,7 +47,31 @@ function getDb(): InstanceType<typeof Database> {
 // Session management
 // ---------------------------------------------------------------------------
 
-const transports: Record<string, StreamableHTTPServerTransport> = {};
+const MAX_SESSIONS = 100;
+const SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+interface SessionEntry {
+  transport: StreamableHTTPServerTransport;
+  lastActivity: number;
+}
+
+const sessions: Record<string, SessionEntry> = {};
+
+/** Evict expired sessions to prevent unbounded memory growth. */
+function evictStaleSessions(): void {
+  const now = Date.now();
+  for (const [sid, entry] of Object.entries(sessions)) {
+    if (now - entry.lastActivity > SESSION_TTL_MS) {
+      entry.transport.close().catch(() => {});
+      delete sessions[sid];
+      console.error(`[${SERVER_NAME}] Session ${sid} expired (TTL)`);
+    }
+  }
+}
+
+// Run eviction every 5 minutes
+const evictionInterval = setInterval(evictStaleSessions, 5 * 60 * 1000);
+evictionInterval.unref();
 
 // ---------------------------------------------------------------------------
 // CORS headers
@@ -77,10 +101,7 @@ function readBody(req: http.IncomingMessage): Promise<string> {
 // Request handler
 // ---------------------------------------------------------------------------
 
-async function handleRequest(
-  req: http.IncomingMessage,
-  res: http.ServerResponse,
-): Promise<void> {
+async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
   const method = req.method?.toUpperCase() ?? 'GET';
 
@@ -96,18 +117,29 @@ async function handleRequest(
   // GET /health
   if (url.pathname === '/health' && method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'healthy' }));
+    res.end(
+      JSON.stringify({
+        status: 'ok',
+        server: SERVER_NAME,
+        version: SERVER_VERSION,
+        uptime_seconds: Math.floor(process.uptime()),
+        capabilities: dbInstance
+          ? ['statutes', 'eu_cross_references', 'case_law', 'preparatory_works']
+          : [],
+        tier: 'professional',
+      }),
+    );
     return;
   }
 
-  // GET /mcp — metadata
+  // GET /mcp — metadata or SSE stream
   if (url.pathname === '/mcp' && method === 'GET') {
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
-    if (sessionId && transports[sessionId]) {
+    if (sessionId && sessions[sessionId]) {
       // Existing session — handle as SSE stream for server-initiated messages
-      const transport = transports[sessionId];
-      await transport.handleRequest(req, res);
+      sessions[sessionId].lastActivity = Date.now();
+      await sessions[sessionId].transport.handleRequest(req, res);
       return;
     }
 
@@ -119,7 +151,7 @@ async function handleRequest(
         version: SERVER_VERSION,
         protocol: 'mcp',
         transport: 'streamable-http',
-        tools: 14,
+        tools: 15,
         description:
           'Dutch legal research MCP server — statutes, case law, kamerstukken, EU cross-references',
       }),
@@ -141,10 +173,10 @@ async function handleRequest(
 
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
-    if (sessionId && transports[sessionId]) {
+    if (sessionId && sessions[sessionId]) {
       // Existing session — delegate to its transport
-      const transport = transports[sessionId];
-      await transport.handleRequest(req, res, parsed);
+      sessions[sessionId].lastActivity = Date.now();
+      await sessions[sessionId].transport.handleRequest(req, res, parsed);
       return;
     }
 
@@ -164,6 +196,16 @@ async function handleRequest(
       return;
     }
 
+    // Enforce max sessions
+    if (Object.keys(sessions).length >= MAX_SESSIONS) {
+      evictStaleSessions();
+      if (Object.keys(sessions).length >= MAX_SESSIONS) {
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Too many active sessions. Try again later.' }));
+        return;
+      }
+    }
+
     // Create new transport + server for this session
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
@@ -172,8 +214,8 @@ async function handleRequest(
     const server = createServer(getDb);
     transport.onclose = () => {
       const sid = transport.sessionId;
-      if (sid && transports[sid]) {
-        delete transports[sid];
+      if (sid && sessions[sid]) {
+        delete sessions[sid];
         console.error(`[${SERVER_NAME}] Session ${sid} closed`);
       }
       server.close().catch(() => {});
@@ -181,9 +223,9 @@ async function handleRequest(
 
     await server.connect(transport);
 
-    // Store the transport by session ID after connection
+    // Store the session after connection
     if (transport.sessionId) {
-      transports[transport.sessionId] = transport;
+      sessions[transport.sessionId] = { transport, lastActivity: Date.now() };
     }
 
     await transport.handleRequest(req, res, parsed);
@@ -193,10 +235,9 @@ async function handleRequest(
   // DELETE /mcp — session termination
   if (url.pathname === '/mcp' && method === 'DELETE') {
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
-    if (sessionId && transports[sessionId]) {
-      const transport = transports[sessionId];
-      await transport.close();
-      delete transports[sessionId];
+    if (sessionId && sessions[sessionId]) {
+      await sessions[sessionId].transport.close();
+      delete sessions[sessionId];
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ status: 'session closed' }));
     } else {
@@ -221,7 +262,15 @@ async function main(): Promise<void> {
   dbInstance = openDb(dbPath);
   console.error(`[${SERVER_NAME}] Database loaded from ${dbPath}`);
 
-  const httpServer = http.createServer(handleRequest);
+  const httpServer = http.createServer((req, res) => {
+    handleRequest(req, res).catch((err: unknown) => {
+      console.error(`[${SERVER_NAME}] Unhandled request error:`, err);
+      if (!res.headersSent) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Internal server error' }));
+      }
+    });
+  });
 
   httpServer.listen(PORT, HOST, () => {
     console.error(`[${SERVER_NAME}] HTTP server listening on http://${HOST}:${PORT}`);
@@ -233,10 +282,12 @@ async function main(): Promise<void> {
   const shutdown = (signal: string) => {
     console.error(`[${SERVER_NAME}] Shutting down (${signal})...`);
 
+    clearInterval(evictionInterval);
+
     // Close all active sessions
-    for (const [sid, transport] of Object.entries(transports)) {
-      transport.close().catch(() => {});
-      delete transports[sid];
+    for (const [sid, entry] of Object.entries(sessions)) {
+      entry.transport.close().catch(() => {});
+      delete sessions[sid];
     }
 
     if (dbInstance) {
