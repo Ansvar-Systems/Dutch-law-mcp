@@ -12,7 +12,7 @@
 
 import * as fs from 'fs';
 import * as https from 'https';
-import * as http from 'http';
+import type * as http from 'http';
 import * as path from 'path';
 import * as os from 'os';
 import * as zlib from 'zlib';
@@ -37,7 +37,7 @@ const PACKAGE_DB_PATH = path.resolve(__dirname, '../../data/database.db');
 function getVersion(): string {
   try {
     const pkgPath = path.resolve(__dirname, '../../package.json');
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) as { version?: string };
     return pkg.version ?? 'latest';
   } catch {
     return 'latest';
@@ -54,7 +54,7 @@ function getCacheDir(): string {
   const base =
     process.env.XDG_CACHE_HOME ??
     (process.platform === 'win32'
-      ? process.env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local')
+      ? (process.env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local'))
       : path.join(os.homedir(), '.cache'));
   return path.join(base, CACHE_DIR_NAME);
 }
@@ -192,13 +192,13 @@ async function downloadDatabase(destPath: string): Promise<void> {
       if (attempt < maxRetries) {
         const delay = Math.pow(2, attempt) * 1000; // 2s, 4s
         process.stderr.write(
-          `\n[dutch-law-mcp] Download failed (attempt ${attempt}/${maxRetries}): ${err instanceof Error ? err.message : err}\n`,
+          `\n[dutch-law-mcp] Download failed (attempt ${attempt}/${maxRetries}): ${err instanceof Error ? err.message : String(err)}\n`,
         );
         process.stderr.write(`  Retrying in ${delay / 1000}s...\n`);
         await new Promise((resolve) => setTimeout(resolve, delay));
       } else {
         throw new Error(
-          `Failed to download database after ${maxRetries} attempts: ${err instanceof Error ? err.message : err}`,
+          `Failed to download database after ${maxRetries} attempts: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
     }
@@ -220,9 +220,7 @@ export async function ensureDatabase(): Promise<string> {
     if (fs.existsSync(envPath)) {
       return envPath;
     }
-    throw new Error(
-      `DUTCH_LAW_DB_PATH is set to "${envPath}" but the file does not exist.`,
-    );
+    throw new Error(`DUTCH_LAW_DB_PATH is set to "${envPath}" but the file does not exist.`);
   }
 
   // 2. User cache directory

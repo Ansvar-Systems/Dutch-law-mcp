@@ -1,12 +1,16 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createTestDatabase, closeTestDatabase } from './test-db.js';
-import Database from '@ansvar/mcp-sqlite';
+import type Database from '@ansvar/mcp-sqlite';
 
 describe('test database fixture', () => {
   let db: InstanceType<typeof Database>;
 
-  beforeAll(() => { db = createTestDatabase(); });
-  afterAll(() => { closeTestDatabase(db); });
+  beforeAll(() => {
+    db = createTestDatabase();
+  });
+  afterAll(() => {
+    closeTestDatabase(db);
+  });
 
   it('should have legal documents', () => {
     const count = db.prepare('SELECT COUNT(*) as c FROM legal_documents').get() as { c: number };
@@ -14,7 +18,9 @@ describe('test database fixture', () => {
   });
 
   it('should have provisions with FTS', () => {
-    const results = db.prepare("SELECT * FROM provisions_fts WHERE provisions_fts MATCH 'onrechtmatige'").all();
+    const results = db
+      .prepare("SELECT * FROM provisions_fts WHERE provisions_fts MATCH 'onrechtmatige'")
+      .all();
     expect(results.length).toBeGreaterThan(0);
   });
 

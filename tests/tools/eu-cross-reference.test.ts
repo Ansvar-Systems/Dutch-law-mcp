@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import Database from '@ansvar/mcp-sqlite';
+import type Database from '@ansvar/mcp-sqlite';
 import { createTestDatabase, closeTestDatabase } from '../fixtures/test-db.js';
 import { getEUBasis } from '../../src/tools/get-eu-basis.js';
 import { getDutchImplementations } from '../../src/tools/get-dutch-implementations.js';
@@ -10,8 +10,12 @@ import { validateEUCompliance } from '../../src/tools/validate-eu-compliance.js'
 describe('EU Cross-Reference Tools', () => {
   let db: InstanceType<typeof Database>;
 
-  beforeAll(() => { db = createTestDatabase(); });
-  afterAll(() => { closeTestDatabase(db); });
+  beforeAll(() => {
+    db = createTestDatabase();
+  });
+  afterAll(() => {
+    closeTestDatabase(db);
+  });
 
   // -------------------------------------------------------------------------
   // getEUBasis
@@ -30,7 +34,7 @@ describe('EU Cross-Reference Tools', () => {
       expect(result.results.document_title).toContain('Uitvoeringswet');
       expect(result.results.eu_documents.length).toBeGreaterThan(0);
 
-      const gdpr = result.results.eu_documents.find(d => d.id === 'regulation:2016/679');
+      const gdpr = result.results.eu_documents.find((d) => d.id === 'regulation:2016/679');
       expect(gdpr).toBeDefined();
       expect(gdpr!.type).toBe('regulation');
       expect(gdpr!.year).toBe(2016);
@@ -49,7 +53,7 @@ describe('EU Cross-Reference Tools', () => {
         document_id: 'BWBR0042124',
         include_articles: true,
       });
-      const gdpr = result.results.eu_documents.find(d => d.id === 'regulation:2016/679');
+      const gdpr = result.results.eu_documents.find((d) => d.id === 'regulation:2016/679');
       expect(gdpr).toBeDefined();
       expect(gdpr!.articles).toBeDefined();
       expect(gdpr!.articles!).toContain('51');
@@ -75,7 +79,7 @@ describe('EU Cross-Reference Tools', () => {
     it('should find EU basis for Wbp (directive:95/46)', async () => {
       const result = await getEUBasis(db, { document_id: 'BWBR0011823' });
       expect(result.results.eu_documents.length).toBeGreaterThan(0);
-      const directive = result.results.eu_documents.find(d => d.id === 'directive:95/46');
+      const directive = result.results.eu_documents.find((d) => d.id === 'directive:95/46');
       expect(directive).toBeDefined();
       expect(directive!.type).toBe('directive');
       expect(directive!.reference_type).toBe('implements');
@@ -99,7 +103,7 @@ describe('EU Cross-Reference Tools', () => {
       expect(result.results.eu_document.year).toBe(2016);
       expect(result.results.implementations.length).toBeGreaterThan(0);
 
-      const uavg = result.results.implementations.find(i => i.bwb_id === 'BWBR0042124');
+      const uavg = result.results.implementations.find((i) => i.bwb_id === 'BWBR0042124');
       expect(uavg).toBeDefined();
       expect(uavg!.title).toContain('Uitvoeringswet');
       expect(uavg!.is_primary_implementation).toBe(true);
@@ -128,13 +132,13 @@ describe('EU Cross-Reference Tools', () => {
         in_force_only: true,
       });
       // Wbp is repealed, so should not appear with in_force_only
-      const wbp = result.results.implementations.find(i => i.bwb_id === 'BWBR0011823');
+      const wbp = result.results.implementations.find((i) => i.bwb_id === 'BWBR0011823');
       expect(wbp).toBeUndefined();
     });
 
     it('should find Wbp as implementation of directive:95/46', async () => {
       const result = await getDutchImplementations(db, { eu_document_id: 'directive:95/46' });
-      const wbp = result.results.implementations.find(i => i.bwb_id === 'BWBR0011823');
+      const wbp = result.results.implementations.find((i) => i.bwb_id === 'BWBR0011823');
       expect(wbp).toBeDefined();
       expect(wbp!.reference_type).toBe('implements');
       expect(wbp!.status).toBe('repealed');
@@ -173,7 +177,7 @@ describe('EU Cross-Reference Tools', () => {
     it('should search by short_name', async () => {
       const result = await searchEUImplementations(db, { query: 'AVG' });
       expect(result.results.documents.length).toBeGreaterThan(0);
-      const avg = result.results.documents.find(d => d.short_name === 'AVG');
+      const avg = result.results.documents.find((d) => d.short_name === 'AVG');
       expect(avg).toBeDefined();
     });
 
@@ -205,7 +209,7 @@ describe('EU Cross-Reference Tools', () => {
 
     it('should return dutch_statute_count', async () => {
       const result = await searchEUImplementations(db, {});
-      const gdpr = result.results.documents.find(d => d.id === 'regulation:2016/679');
+      const gdpr = result.results.documents.find((d) => d.id === 'regulation:2016/679');
       expect(gdpr).toBeDefined();
       expect(gdpr!.dutch_statute_count).toBeGreaterThan(0);
     });
@@ -217,9 +221,9 @@ describe('EU Cross-Reference Tools', () => {
 
     it('should convert in_force to boolean', async () => {
       const result = await searchEUImplementations(db, {});
-      const gdpr = result.results.documents.find(d => d.id === 'regulation:2016/679');
+      const gdpr = result.results.documents.find((d) => d.id === 'regulation:2016/679');
       expect(gdpr!.in_force).toBe(true);
-      const directive = result.results.documents.find(d => d.id === 'directive:95/46');
+      const directive = result.results.documents.find((d) => d.id === 'directive:95/46');
       expect(directive!.in_force).toBe(false);
     });
   });
@@ -301,7 +305,7 @@ describe('EU Cross-Reference Tools', () => {
     it('should detect issues for Wbp referencing repealed directive', async () => {
       const result = await validateEUCompliance(db, { document_id: 'BWBR0011823' });
       expect(result.results.issues.length).toBeGreaterThan(0);
-      const repealedIssue = result.results.issues.find(i => i.type === 'repealed_eu_document');
+      const repealedIssue = result.results.issues.find((i) => i.type === 'repealed_eu_document');
       expect(repealedIssue).toBeDefined();
       expect(repealedIssue!.severity).toBe('high');
       expect(repealedIssue!.eu_document_id).toBe('directive:95/46');

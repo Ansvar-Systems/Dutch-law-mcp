@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import Database from '@ansvar/mcp-sqlite';
+import type Database from '@ansvar/mcp-sqlite';
 import { createTestDatabase, closeTestDatabase } from '../fixtures/test-db.js';
 import {
   getProvisionAtDate,
@@ -11,8 +11,12 @@ import {
 describe('getProvisionAtDate', () => {
   let db: InstanceType<typeof Database>;
 
-  beforeAll(() => { db = createTestDatabase(); });
-  afterAll(() => { closeTestDatabase(db); });
+  beforeAll(() => {
+    db = createTestDatabase();
+  });
+  afterAll(() => {
+    closeTestDatabase(db);
+  });
 
   it('should return results and metadata', async () => {
     const result = await getProvisionAtDate(db, {
@@ -143,8 +147,12 @@ describe('getProvisionAtDate', () => {
 describe('getCurrentProvision', () => {
   let db: InstanceType<typeof Database>;
 
-  beforeAll(() => { db = createTestDatabase(); });
-  afterAll(() => { closeTestDatabase(db); });
+  beforeAll(() => {
+    db = createTestDatabase();
+  });
+  afterAll(() => {
+    closeTestDatabase(db);
+  });
 
   it('should return current version (today)', async () => {
     const result = await getCurrentProvision(db, 'BWBR0042124', '30');
@@ -162,8 +170,12 @@ describe('getCurrentProvision', () => {
 describe('getAllVersions', () => {
   let db: InstanceType<typeof Database>;
 
-  beforeAll(() => { db = createTestDatabase(); });
-  afterAll(() => { closeTestDatabase(db); });
+  beforeAll(() => {
+    db = createTestDatabase();
+  });
+  afterAll(() => {
+    closeTestDatabase(db);
+  });
 
   it('should return all versions sorted by valid_from', async () => {
     const result = await getAllVersions(db, 'BWBR0042124', '30');
@@ -194,43 +206,29 @@ describe('getAllVersions', () => {
 describe('diffProvisionDates', () => {
   let db: InstanceType<typeof Database>;
 
-  beforeAll(() => { db = createTestDatabase(); });
-  afterAll(() => { closeTestDatabase(db); });
+  beforeAll(() => {
+    db = createTestDatabase();
+  });
+  afterAll(() => {
+    closeTestDatabase(db);
+  });
 
   it('should detect no changes when same version', async () => {
-    const result = await diffProvisionDates(
-      db,
-      'BWBR0042124',
-      '30',
-      '2020-01-01',
-      '2021-01-01',
-    );
+    const result = await diffProvisionDates(db, 'BWBR0042124', '30', '2020-01-01', '2021-01-01');
     expect(result.results.changed).toBe(false);
     expect(result.results.version1.content).toBe(result.results.version2.content);
   });
 
   it('should detect changes between different versions', async () => {
     // Compare before and after Wbp expiry
-    const result = await diffProvisionDates(
-      db,
-      'BWBR0011823',
-      '1',
-      '2017-01-01',
-      '2020-01-01',
-    );
+    const result = await diffProvisionDates(db, 'BWBR0011823', '1', '2017-01-01', '2020-01-01');
     expect(result.results.changed).toBe(true);
     expect(result.results.version1.status).toBe('historical');
     expect(result.results.version2.status).toBe('not_found');
   });
 
   it('should return both versions', async () => {
-    const result = await diffProvisionDates(
-      db,
-      'BWBR0042124',
-      '30',
-      '2019-01-01',
-      '2020-01-01',
-    );
+    const result = await diffProvisionDates(db, 'BWBR0042124', '30', '2019-01-01', '2020-01-01');
     expect(result.results.version1).toBeDefined();
     expect(result.results.version2).toBeDefined();
     expect(result.results.version1.provision_ref).toBe('30');
@@ -244,13 +242,7 @@ describe('diffProvisionDates', () => {
   });
 
   it('should detect future status change', async () => {
-    const result = await diffProvisionDates(
-      db,
-      'BWBR0042124',
-      '30',
-      '2017-01-01',
-      '2020-01-01',
-    );
+    const result = await diffProvisionDates(db, 'BWBR0042124', '30', '2017-01-01', '2020-01-01');
     expect(result.results.version1.status).toBe('future');
     expect(result.results.version2.status).toBe('current');
     expect(result.results.changed).toBe(false); // Same content, just different status

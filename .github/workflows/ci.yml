@@ -129,20 +129,6 @@ jobs:
 
   contract-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: build
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-      - run: npm ci --ignore-scripts
-      - run: npm run build
-      - run: npm run test:contract
-
-  contract-tests-nightly:
-    runs-on: ubuntu-latest
     timeout-minutes: 15
     if: github.event_name == 'schedule'
     needs: build
@@ -154,4 +140,7 @@ jobs:
           cache: 'npm'
       - run: npm ci --ignore-scripts
       - run: npm run build
-      - run: CONTRACT_MODE=nightly npm run test:contract
+      - name: Run contract tests
+        run: npm run test:contract
+      - name: Run nightly contract tests
+        run: CONTRACT_MODE=nightly npm run test:contract

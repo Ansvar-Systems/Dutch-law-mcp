@@ -1,13 +1,17 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import Database from '@ansvar/mcp-sqlite';
+import type Database from '@ansvar/mcp-sqlite';
 import { createTestDatabase, closeTestDatabase } from '../fixtures/test-db.js';
-import { checkCurrency, type CheckCurrencyInput } from '../../src/tools/check-currency.js';
+import { checkCurrency } from '../../src/tools/check-currency.js';
 
 describe('checkCurrency', () => {
   let db: InstanceType<typeof Database>;
 
-  beforeAll(() => { db = createTestDatabase(); });
-  afterAll(() => { closeTestDatabase(db); });
+  beforeAll(() => {
+    db = createTestDatabase();
+  });
+  afterAll(() => {
+    closeTestDatabase(db);
+  });
 
   it('should return results and metadata', async () => {
     const result = await checkCurrency(db, { document_id: 'BWBR0005289' });
@@ -27,7 +31,7 @@ describe('checkCurrency', () => {
     const result = await checkCurrency(db, { document_id: 'BWBR0011823' });
     expect(result.results.is_current).toBe(false);
     expect(result.results.status).toBe('repealed');
-    expect(result.results.warnings.some(w => w.includes('ingetrokken'))).toBe(true);
+    expect(result.results.warnings.some((w) => w.includes('ingetrokken'))).toBe(true);
   });
 
   it('should extract repeal date from description', async () => {
@@ -40,7 +44,7 @@ describe('checkCurrency', () => {
     const result = await checkCurrency(db, { document_id: 'BWBR9999999' });
     expect(result.results.is_current).toBe(false);
     expect(result.results.status).toBe('not_found');
-    expect(result.results.warnings.some(w => w.includes('not found'))).toBe(true);
+    expect(result.results.warnings.some((w) => w.includes('not found'))).toBe(true);
   });
 
   it('should check provision version validity', async () => {
@@ -83,7 +87,7 @@ describe('checkCurrency', () => {
     });
     // UAVG in_force_date = 2018-05-25
     expect(result.results.is_current).toBe(false);
-    expect(result.results.warnings.some(w => w.includes('before the in-force date'))).toBe(true);
+    expect(result.results.warnings.some((w) => w.includes('before the in-force date'))).toBe(true);
   });
 
   it('should include related case law via cross references', async () => {

@@ -1,5 +1,13 @@
 import { XMLParser } from 'fast-xml-parser';
 
+/** Safely convert an unknown XML attribute value to string. */
+function attrToString(val: unknown): string {
+  if (val == null) return '';
+  if (typeof val === 'string') return val;
+  if (typeof val === 'number' || typeof val === 'boolean') return String(val);
+  return '';
+}
+
 export interface ParsedStatute {
   bwb_id: string;
   title: string;
@@ -7,13 +15,13 @@ export interface ParsedStatute {
 }
 
 export interface ParsedProvision {
-  provision_ref: string;  // e.g., "6:162" or "287"
+  provision_ref: string; // e.g., "6:162" or "287"
   book?: string;
   chapter?: string;
   section?: string;
   article: string;
   title?: string;
-  content: string;  // Full text content of the artikel
+  content: string; // Full text content of the artikel
 }
 
 /**
@@ -73,7 +81,7 @@ function extractArtikelContent(artikel: Record<string, unknown>): string {
       for (const al of als) {
         const text = extractText(al).trim();
         if (text) {
-          const prefix = lidNr ? `${lidNr}. ` : '';
+          const prefix = lidNr ? `${attrToString(lidNr)}. ` : '';
           parts.push(prefix + text);
         }
       }
@@ -133,8 +141,8 @@ function getKopTitel(node: Record<string, unknown>): string | undefined {
  */
 function getArticleNumber(artikel: Record<string, unknown>): string {
   // Try @_nr attribute first
-  const attrNr = artikel['@_nr'];
-  if (attrNr != null) return String(attrNr).trim();
+  const attrNr = attrToString(artikel['@_nr']);
+  if (attrNr) return attrNr.trim();
 
   // Fall back to kop > nr
   const kopNr = getKopNr(artikel);
@@ -174,8 +182,7 @@ function collectArtikels(
   for (const boek of toArray(obj['boek'])) {
     if (boek == null || typeof boek !== 'object') continue;
     const boekObj = boek as Record<string, unknown>;
-    const boekNr = (boekObj['@_nr'] != null ? String(boekObj['@_nr']).trim() : undefined)
-      ?? getKopNr(boekObj);
+    const boekNr = (attrToString(boekObj['@_nr']).trim() || undefined) ?? getKopNr(boekObj);
 
     const newContext: HierarchyContext = {
       ...context,
@@ -261,7 +268,9 @@ export function parseBwbXml(xml: string): ParsedStatute {
     ignoreAttributes: false,
     attributeNamePrefix: '@_',
     isArray: (name: string) =>
-      ['boek', 'hoofdstuk', 'titeldeel', 'afdeling', 'paragraaf', 'artikel', 'lid', 'al'].includes(name),
+      ['boek', 'hoofdstuk', 'titeldeel', 'afdeling', 'paragraaf', 'artikel', 'lid', 'al'].includes(
+        name,
+      ),
   });
 
   const doc = parser.parse(xml) as Record<string, unknown>;
@@ -277,7 +286,7 @@ export function parseBwbXml(xml: string): ParsedStatute {
 
   if (toestand) {
     // Real toestand XML: toestand > wetgeving
-    bwbId = toestand['@_bwb-id'] ? String(toestand['@_bwb-id']) : '';
+    bwbId = attrToString(toestand['@_bwb-id']);
     wetgeving = toestand['wetgeving'] as Record<string, unknown> | undefined;
   } else {
     // Legacy/test format: wet-besluit > wetgeving
@@ -293,15 +302,16 @@ export function parseBwbXml(xml: string): ParsedStatute {
   }
 
   // Extract BWB-ID (may be on wetgeving if not on toestand)
-  if (!bwbId && wetgeving['@_bwb-id']) {
-    bwbId = String(wetgeving['@_bwb-id']);
+  if (!bwbId) {
+    bwbId = attrToString(wetgeving['@_bwb-id']);
   }
 
   // Extract title from intitule or citeertitel
   const intitule = wetgeving['intitule'];
   const citeertitel = wetgeving['citeertitel'];
-  const title = (intitule ? extractText(intitule).trim() : '')
-    || (citeertitel ? extractText(citeertitel).trim() : '');
+  const title =
+    (intitule ? extractText(intitule).trim() : '') ||
+    (citeertitel ? extractText(citeertitel).trim() : '');
 
   // Navigate to the content container — different structures exist:
   //   Wetten:     wetgeving > wet-besluit > wettekst

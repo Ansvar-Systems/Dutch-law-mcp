@@ -1,13 +1,17 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import Database from '@ansvar/mcp-sqlite';
+import type Database from '@ansvar/mcp-sqlite';
 import { createTestDatabase, closeTestDatabase } from '../fixtures/test-db.js';
-import { searchCaseLaw, type SearchCaseLawInput } from '../../src/tools/search-case-law.js';
+import { searchCaseLaw } from '../../src/tools/search-case-law.js';
 
 describe('searchCaseLaw', () => {
   let db: InstanceType<typeof Database>;
 
-  beforeAll(() => { db = createTestDatabase(); });
-  afterAll(() => { closeTestDatabase(db); });
+  beforeAll(() => {
+    db = createTestDatabase();
+  });
+  afterAll(() => {
+    closeTestDatabase(db);
+  });
 
   it('should return results and metadata', async () => {
     const result = await searchCaseLaw(db, { query: 'onrechtmatige daad' });
@@ -115,7 +119,7 @@ describe('searchCaseLaw', () => {
   it('should find RVS case law about bestuursrecht', async () => {
     const result = await searchCaseLaw(db, { query: 'bestuursorgaan' });
     expect(result.results.length).toBeGreaterThan(0);
-    const rvs = result.results.find(r => r.court === 'RVS');
+    const rvs = result.results.find((r) => r.court === 'RVS');
     expect(rvs).toBeDefined();
     expect(rvs!.ecli).toBe('ECLI:NL:RVS:2020:1234');
   });
