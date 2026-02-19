@@ -101,3 +101,6 @@ temp/
 .serena/
 .claude/
 .vercel
+data/*.db.gz
+data/*.db.lock
+data/ingest-failures.log
