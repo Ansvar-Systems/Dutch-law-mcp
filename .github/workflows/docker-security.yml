@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    # Daily at 3 AM UTC (aligns with dependency scans)
+    # Weekly at 3 AM UTC (aligns with dependency scans)
     - cron: '0 3 * * *'
   workflow_dispatch:
 
