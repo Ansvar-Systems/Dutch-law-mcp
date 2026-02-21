@@ -32,6 +32,14 @@ import { validateEUCompliance, type ValidateEUComplianceInput } from './validate
 import { getProvisionAtDate, type GetProvisionAtDateInput } from './get-provision-at-date.js';
 import { listSources, type ListSourcesInput } from './list-sources.js';
 import { validateInput, COMMON_FIELDS } from '../utils/validate-input.js';
+import {
+  getProvisionHistory,
+  diffProvision,
+  getRecentChanges,
+  type GetProvisionHistoryInput,
+  type DiffProvisionInput,
+  type GetRecentChangesInput,
+} from './version-tracking.js';
 
 const READ_ONLY_ANNOTATIONS = {
   readOnlyHint: true,
@@ -375,6 +383,78 @@ export const TOOLS: Tool[] = [
       required: [],
     },
   },
+  // --- Premium tools: version tracking ---
+  {
+    name: 'get_provision_history',
+    description:
+      'Get the full version timeline for a specific Dutch provision, showing all amendments with dates and change summaries. Premium feature — requires Ansvar Intelligence Portal.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        document_id: {
+          type: 'string',
+          description: 'BWB-ID of the statute (e.g. "BWBR0005289").',
+        },
+        provision_ref: {
+          type: 'string',
+          description: 'Provision reference (e.g. "6:162" or "287").',
+        },
+      },
+      required: ['document_id', 'provision_ref'],
+    },
+  },
+  {
+    name: 'diff_provision',
+    description:
+      'Show what changed in a Dutch provision between two dates, including a unified diff and change summary. Premium feature — requires Ansvar Intelligence Portal.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        document_id: {
+          type: 'string',
+          description: 'BWB-ID of the statute (e.g. "BWBR0005289").',
+        },
+        provision_ref: {
+          type: 'string',
+          description: 'Provision reference (e.g. "6:162").',
+        },
+        from_date: {
+          type: 'string',
+          description: 'ISO date to diff from (e.g. "2024-01-01").',
+        },
+        to_date: {
+          type: 'string',
+          description: 'ISO date to diff to (defaults to current).',
+        },
+      },
+      required: ['document_id', 'provision_ref', 'from_date'],
+    },
+  },
+  {
+    name: 'get_recent_changes',
+    description:
+      'List all Dutch provisions that changed since a given date, with change summaries. Optionally filter to a specific statute. Premium feature — requires Ansvar Intelligence Portal.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        since: {
+          type: 'string',
+          description: 'ISO date (e.g. "2024-06-01").',
+        },
+        document_id: {
+          type: 'string',
+          description: 'BWB-ID to filter to a specific statute. Omit for all.',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum changes to return. Default: 50, max: 200.',
+          minimum: 1,
+          maximum: 200,
+        },
+      },
+      required: ['since'],
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -474,6 +554,15 @@ export function registerTools(server: Server, getDb: () => InstanceType<typeof D
           break;
         case 'list_sources':
           result = await listSources(getDb(), a as unknown as ListSourcesInput);
+          break;
+        case 'get_provision_history':
+          result = await getProvisionHistory(getDb(), a as unknown as GetProvisionHistoryInput);
+          break;
+        case 'diff_provision':
+          result = await diffProvision(getDb(), a as unknown as DiffProvisionInput);
+          break;
+        case 'get_recent_changes':
+          result = await getRecentChanges(getDb(), a as unknown as GetRecentChangesInput);
           break;
         default:
           return {
