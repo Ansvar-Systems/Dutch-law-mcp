@@ -7,7 +7,7 @@ on:
     branches: [main]
   schedule:
     # Weekly at 3 AM UTC (aligns with dependency scans)
-    - cron: '0 3 * * *'
+    - cron: '0 3 * * 3'
   workflow_dispatch:
 
 permissions:
