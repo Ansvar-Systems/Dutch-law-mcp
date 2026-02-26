@@ -26,6 +26,7 @@
     "test:contract": "vitest run --include '__tests__/contract/**/*.test.ts'",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "download:db": "bash scripts/download-db.sh",
     "drift:detect": "tsx scripts/drift-detect.ts",
     "validate": "npm run lint && npm test && npm run test:contract",
     "ingest": "tsx scripts/ingest-bwb.ts",
