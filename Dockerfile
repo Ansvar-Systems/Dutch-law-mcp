@@ -51,6 +51,8 @@ WORKDIR /app
 # Set production environment
 ENV NODE_ENV=production
 ENV DUTCH_LAW_DB_PATH=/app/data/database.db
+# WASM SQLite loads the entire DB into memory — 64MB DB needs extra heap
+ENV NODE_OPTIONS="--max-old-space-size=512"
 
 # MODE controls the entry point: "stdio" (default) or "http"
 ENV MODE=stdio
