@@ -234,13 +234,12 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     };
 
     await server.connect(transport);
+    await transport.handleRequest(req, res, parsed);
 
-    // Store the session after connection
+    // Store the session (must be after handleRequest — sessionId is set during request handling)
     if (transport.sessionId) {
       sessions.set(transport.sessionId, { transport, lastActivity: Date.now() });
     }
-
-    await transport.handleRequest(req, res, parsed);
     return;
   }
 
