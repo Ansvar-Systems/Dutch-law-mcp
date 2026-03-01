@@ -16,7 +16,7 @@
 
 import * as http from 'http';
 import { randomUUID } from 'crypto';
-import Database from '@ansvar/mcp-sqlite';
+import type Database from '@ansvar/mcp-sqlite';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 
@@ -77,10 +77,7 @@ function readBody(req: http.IncomingMessage): Promise<string> {
 // Request handler
 // ---------------------------------------------------------------------------
 
-async function handleRequest(
-  req: http.IncomingMessage,
-  res: http.ServerResponse,
-): Promise<void> {
+async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
   const method = req.method?.toUpperCase() ?? 'GET';
 
@@ -180,13 +177,13 @@ async function handleRequest(
     };
 
     await server.connect(transport);
+    await transport.handleRequest(req, res, parsed);
 
-    // Store the transport by session ID after connection
+    // Store the transport AFTER handleRequest — sessionId is set during
+    // the initialize request, so it's undefined before handleRequest runs.
     if (transport.sessionId) {
       transports[transport.sessionId] = transport;
     }
-
-    await transport.handleRequest(req, res, parsed);
     return;
   }
 
@@ -221,7 +218,15 @@ async function main(): Promise<void> {
   dbInstance = openDb(dbPath);
   console.error(`[${SERVER_NAME}] Database loaded from ${dbPath}`);
 
-  const httpServer = http.createServer(handleRequest);
+  const httpServer = http.createServer((req, res) => {
+    handleRequest(req, res).catch((err) => {
+      console.error(`[${SERVER_NAME}] Unhandled error:`, err);
+      if (!res.headersSent) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Internal server error' }));
+      }
+    });
+  });
 
   httpServer.listen(PORT, HOST, () => {
     console.error(`[${SERVER_NAME}] HTTP server listening on http://${HOST}:${PORT}`);
