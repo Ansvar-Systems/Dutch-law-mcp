@@ -31,7 +31,9 @@
     "ingest": "tsx scripts/ingest-bwb.ts",
     "ingest:all": "tsx scripts/auto-ingest-all-statutes.ts",
     "ingest:cases": "tsx scripts/ingest-rechtspraak.ts",
+    "ingest:cases:premium": "tsx scripts/ingest-rechtspraak-premium.ts",
     "ingest:prep-works": "tsx scripts/ingest-preparatory-works.ts",
+    "ingest:tweedekamer": "tsx scripts/ingest-tweedekamer.ts",
     "check-updates": "tsx scripts/check-updates.ts",
     "extract:definitions": "tsx scripts/extract-definitions.ts",
     "populate:xrefs": "tsx scripts/populate-cross-references.ts",
@@ -52,6 +54,7 @@
     "@modelcontextprotocol/sdk": "^1.25.3"
   },
   "devDependencies": {
+    "better-sqlite3": "npm:@ansvar/mcp-sqlite@^1.0.3",
     "@eslint/js": "^9.27.0",
     "@types/node": "^22.15.29",
     "@vercel/node": "^5.6.3",
