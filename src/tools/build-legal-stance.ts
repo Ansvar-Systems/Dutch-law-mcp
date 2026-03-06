@@ -1,5 +1,6 @@
 import type { Database } from '@ansvar/mcp-sqlite';
 import { generateResponseMetadata, type ToolResponse } from '../utils/metadata.js';
+import { resolveDocumentId } from '../utils/document-id.js';
 import { searchLegislation, type SearchLegislationResult } from './search-legislation.js';
 import { searchCaseLaw, type SearchCaseLawResult } from './search-case-law.js';
 import { hasTable } from '../capabilities.js';
@@ -42,13 +43,36 @@ export async function buildLegalStance(
   db: Database,
   input: BuildLegalStanceInput,
 ): Promise<ToolResponse<BuildLegalStanceResult>> {
-  const { query, document_id, as_of_date } = input;
+  const { query, as_of_date } = input;
   const limit = input.limit ?? DEFAULT_LIMIT;
+
+  // Resolve document_id from title if provided
+  let resolvedDocId: string | undefined;
+  if (input.document_id) {
+    const resolved = resolveDocumentId(db, input.document_id);
+    resolvedDocId = resolved ?? undefined;
+    if (!resolved) {
+      const emptyResult: BuildLegalStanceResult = {
+        query,
+        provisions: [],
+        case_law: [],
+        preparatory_works: [],
+        cross_references: [],
+      };
+      return {
+        results: emptyResult,
+        _metadata: {
+          ...generateResponseMetadata(db),
+          note: `No document found matching "${input.document_id}"`,
+        },
+      };
+    }
+  }
 
   // 1. Search provisions
   const provisionResults = await searchLegislation(db, {
     query,
-    document_id,
+    document_id: resolvedDocId,
     as_of_date,
     limit,
   });
@@ -67,12 +91,12 @@ export async function buildLegalStance(
     caseLawResults = clResponse.results;
   } else {
     upgradeNotices.push(
-      'Case law results omitted — the Dutch case law database (900,000+ court decisions) is too large to serve from this free community instance.'
+      'Case law results omitted — the Dutch case law database (900,000+ court decisions) is too large to serve from this free community instance.',
     );
   }
 
   // 4. Collect relevant statute IDs from provisions
-  const statuteIds = [...new Set(provisionResults.results.map(p => p.document_id))];
+  const statuteIds = [...new Set(provisionResults.results.map((p) => p.document_id))];
 
   // 5. Fetch preparatory works for found statutes (if available)
   const preparatoryWorks: PreparatoryWorkSummary[] = [];
@@ -94,16 +118,16 @@ export async function buildLegalStance(
     preparatoryWorks.push(...prepRows);
   } else if (!hasPrepWorks) {
     upgradeNotices.push(
-      'Preparatory works (kamerstukken) omitted — the parliamentary documents database is too large to serve from this free community instance.'
+      'Preparatory works (kamerstukken) omitted — the parliamentary documents database is too large to serve from this free community instance.',
     );
   }
 
   // 6. Collect provision refs from found provisions and case law
-  const provisionDocRefs = provisionResults.results.map(p => ({
+  const provisionDocRefs = provisionResults.results.map((p) => ({
     doc: p.document_id,
     ref: p.provision_ref,
   }));
-  const caseLawDocIds = caseLawResults.map(c => c.document_id);
+  const caseLawDocIds = caseLawResults.map((c) => c.document_id);
   const allDocIds = [...new Set([...statuteIds, ...caseLawDocIds])];
 
   // 7. Fetch cross-references for relevant documents (if available)
