@@ -1,24 +1,32 @@
-const EXPLICIT_FTS_SYNTAX_PATTERN = /["*():^]|\bAND\b|\bOR\b|\bNOT\b/iu;
+const EXPLICIT_FTS_SYNTAX_PATTERN = /["():^]|\bAND\b|\bOR\b|\bNOT\b/iu;
 
 function sanitizeToken(token: string): string {
-  return token.replace(/[^\p{L}\p{N}_]/gu, '');
+  // Preserve trailing * for FTS5 prefix queries
+  const hasSuffix = token.endsWith('*');
+  const cleaned = token.replace(/[^\p{L}\p{N}_]/gu, '');
+  return hasSuffix ? `${cleaned}*` : cleaned;
 }
 
 function extractTokens(query: string): string[] {
-  const matches = query.normalize('NFC').match(/[\p{L}\p{N}_]+/gu) ?? [];
-  return matches.map(sanitizeToken).filter(token => token.length > 1);
+  // Capture word chars plus optional trailing * for prefix search
+  const matches = query.normalize('NFC').match(/[\p{L}\p{N}_]+\*?/gu) ?? [];
+  return matches.map(sanitizeToken).filter((token) => token.replace(/\*$/, '').length > 1);
 }
 
 function escapeExplicitQuery(query: string): string {
   return query.replace(/[()^:]/g, (char) => `"${char}"`);
 }
 
+function ensurePrefix(token: string): string {
+  return token.endsWith('*') ? token : `${token}*`;
+}
+
 function buildPrefixAndQuery(tokens: string[]): string {
-  return tokens.map(token => `${token}*`).join(' ');
+  return tokens.map(ensurePrefix).join(' ');
 }
 
 function buildPrefixOrQuery(tokens: string[]): string {
-  return tokens.map(token => `${token}*`).join(' OR ');
+  return tokens.map(ensurePrefix).join(' OR ');
 }
 
 export interface FtsQueryVariants {
