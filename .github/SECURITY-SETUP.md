@@ -4,8 +4,8 @@ This document describes the secrets and configuration required for the Dutch Law
 
 ## Required Secrets
 
-| Secret | Used By | Description |
-|--------|---------|-------------|
+| Secret      | Used By       | Description                                                 |
+| ----------- | ------------- | ----------------------------------------------------------- |
 | `NPM_TOKEN` | `publish.yml` | npm automation token for publishing `@ansvar/dutch-law-mcp` |
 
 ### Setting up NPM_TOKEN
@@ -24,15 +24,15 @@ This document describes the secrets and configuration required for the Dutch Law
 
 All workflows follow the principle of least privilege:
 
-| Workflow | Permissions | Notes |
-|----------|-------------|-------|
-| `ci.yml` | `contents: read` | Build and test only |
-| `semgrep.yml` | `contents: read`, `security-events: write` | SARIF upload |
-| `trivy.yml` | `contents: read`, `security-events: write` | SARIF upload |
-| `ossf-scorecard.yml` | `contents: read`, `security-events: write`, `id-token: write`, `actions: read` | Scorecard publish + SARIF |
-| `publish.yml` | `contents: write`, `id-token: write` | npm provenance + GitHub Release |
-| `check-updates.yml` | `contents: read`, `issues: write` | Creates issues for data updates |
-| `drift-detect.yml` | `contents: read` | Data integrity checks |
+| Workflow             | Permissions                                                                    | Notes                           |
+| -------------------- | ------------------------------------------------------------------------------ | ------------------------------- |
+| `ci.yml`             | `contents: read`                                                               | Build and test only             |
+| `semgrep.yml`        | `contents: read`, `security-events: write`                                     | SARIF upload                    |
+| `trivy.yml`          | `contents: read`, `security-events: write`                                     | SARIF upload                    |
+| `ossf-scorecard.yml` | `contents: read`, `security-events: write`, `id-token: write`, `actions: read` | Scorecard publish + SARIF       |
+| `publish.yml`        | `contents: write`, `id-token: write`                                           | npm provenance + GitHub Release |
+| `check-updates.yml`  | `contents: read`, `issues: write`                                              | Creates issues for data updates |
+| `drift-detect.yml`   | `contents: read`                                                               | Data integrity checks           |
 
 ## GitHub Repository Settings
 
