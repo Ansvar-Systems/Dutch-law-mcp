@@ -12,14 +12,15 @@ import { fileURLToPath } from 'url';
 
 import { registerTools } from './tools/registry.js';
 import { ensureDatabase } from './utils/ensure-database.js';
-import { detectCapabilities, readDbMetadata, type Capability, type DbMetadata } from './capabilities.js';
+import {
+  detectCapabilities,
+  readDbMetadata,
+  type Capability,
+  type DbMetadata,
+} from './capabilities.js';
+import { SERVER_NAME, SERVER_VERSION } from './version.js';
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-export const SERVER_NAME = 'dutch-legal-citations';
-export const SERVER_VERSION = '1.0.0';
+export { SERVER_NAME, SERVER_VERSION };
 const DB_ENV_VAR = 'DUTCH_LAW_DB_PATH';
 const DEFAULT_DB_PATH = '../data/database.db';
 
@@ -52,7 +53,9 @@ function getDb(): InstanceType<typeof Database> {
     // Detect capabilities on first open
     dbCapabilities = detectCapabilities(dbInstance);
     dbMetadata = readDbMetadata(dbInstance);
-    console.error(`[${SERVER_NAME}] Database tier: ${dbMetadata.tier}, capabilities: ${[...dbCapabilities].join(', ')}`);
+    console.error(
+      `[${SERVER_NAME}] Database tier: ${dbMetadata.tier}, capabilities: ${[...dbCapabilities].join(', ')}`,
+    );
   }
   return dbInstance;
 }
@@ -89,11 +92,11 @@ export function createServer(getDbFn: () => InstanceType<typeof Database>): Serv
     },
   );
 
-  // Register all 14 MCP tools
+  // Register all 15 MCP tools
   registerTools(server, getDbFn);
 
   // Resources
-  server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+  server.setRequestHandler(ListResourcesRequestSchema, () => ({
     resources: [
       {
         uri: 'case-law-stats://dutch-law-mcp/metadata',
@@ -105,7 +108,7 @@ export function createServer(getDbFn: () => InstanceType<typeof Database>): Serv
     ],
   }));
 
-  server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  server.setRequestHandler(ReadResourceRequestSchema, (request) => {
     const { uri } = request.params;
 
     if (uri === 'case-law-stats://dutch-law-mcp/metadata') {

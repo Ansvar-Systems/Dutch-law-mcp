@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatCitationTool, type FormatCitationInput } from '../../src/tools/format-citation.js';
+import { formatCitationTool } from '../../src/tools/format-citation.js';
 
 describe('formatCitationTool', () => {
   it('should return results and metadata', async () => {

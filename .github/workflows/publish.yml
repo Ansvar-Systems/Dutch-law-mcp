@@ -101,14 +101,43 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Attach SBOM to GitHub Release
+      # ─────────────────────────────────────────────────────────────────────
+      # DATABASE ARTIFACT
+      # ─────────────────────────────────────────────────────────────────────
+      # Build DB from seeds, compress, and upload to GitHub Release.
+      # Downstream Docker builds use scripts/download-db.sh to fetch this
+      # instead of re-running slow BWB API ingestion.
+      # ─────────────────────────────────────────────────────────────────────
+
+      - name: Build database from seeds
+        run: npm run build:db
+
+      - name: Compress database
+        run: gzip -k data/database.db
+
+      - name: Build free-tier database
+        run: npm run build:db:free
+        continue-on-error: true
+
+      - name: Compress free-tier database
+        run: |
+          if [ -f data/database-free.db ]; then
+            gzip -k data/database-free.db
+          fi
+
+      - name: Upload artifacts to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: sbom.cdx.json
+          files: |
+            sbom.cdx.json
+            data/database.db.gz
+            data/database-free.db.gz
           append_body: true
           body: |
-            ### Supply Chain Artifacts
-            - `sbom.cdx.json` — CycloneDX SBOM for this release
+            ### Artifacts
+            - `database.db.gz` — Full SQLite database (download for Docker builds)
+            - `database-free.db.gz` — Free-tier database (for Vercel deployment)
+            - `sbom.cdx.json` — CycloneDX SBOM
 
   # ─────────────────────────────────────────────────────────────────────────
   # DOCKER JOB (OPTIONAL)

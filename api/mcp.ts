@@ -6,11 +6,7 @@ import { existsSync, copyFileSync, rmSync } from 'fs';
 import { join } from 'path';
 
 import { registerTools } from '../src/tools/registry.js';
-
-// Defined here instead of importing from src/index.ts to avoid triggering
-// the stdio server's main() entry point (which calls process.exit on failure).
-const SERVER_NAME = 'dutch-legal-citations';
-const SERVER_VERSION = '1.0.0';
+import { SERVER_NAME, SERVER_VERSION } from '../src/version.js';
 
 // ---------------------------------------------------------------------------
 // Database — bundled free-tier DB, copied to /tmp on cold start
@@ -49,16 +45,10 @@ function getDatabase(): InstanceType<typeof Database> {
 // Vercel handler
 // ---------------------------------------------------------------------------
 
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse,
-) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'Content-Type, mcp-session-id',
-  );
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, mcp-session-id');
   res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id');
 
   if (req.method === 'OPTIONS') {

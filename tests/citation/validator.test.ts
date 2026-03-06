@@ -1,13 +1,17 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { validateCitation } from '../../src/citation/validator.js';
 import { createTestDatabase, closeTestDatabase } from '../fixtures/test-db.js';
-import Database from '@ansvar/mcp-sqlite';
+import type Database from '@ansvar/mcp-sqlite';
 
 describe('validateCitation', () => {
   let db: InstanceType<typeof Database>;
 
-  beforeAll(() => { db = createTestDatabase(); });
-  afterAll(() => { closeTestDatabase(db); });
+  beforeAll(() => {
+    db = createTestDatabase();
+  });
+  afterAll(() => {
+    closeTestDatabase(db);
+  });
 
   it('should validate existing statute + provision', () => {
     const r = validateCitation(db, 'Art. 6:162 BW');

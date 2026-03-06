@@ -1,13 +1,17 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import Database from '@ansvar/mcp-sqlite';
+import type Database from '@ansvar/mcp-sqlite';
 import { createTestDatabase, closeTestDatabase } from '../fixtures/test-db.js';
-import { getPreparatoryWorks, type GetPreparatoryWorksInput } from '../../src/tools/get-preparatory-works.js';
+import { getPreparatoryWorks } from '../../src/tools/get-preparatory-works.js';
 
 describe('getPreparatoryWorks', () => {
   let db: InstanceType<typeof Database>;
 
-  beforeAll(() => { db = createTestDatabase(); });
-  afterAll(() => { closeTestDatabase(db); });
+  beforeAll(() => {
+    db = createTestDatabase();
+  });
+  afterAll(() => {
+    closeTestDatabase(db);
+  });
 
   it('should return results and metadata', async () => {
     const result = await getPreparatoryWorks(db, { statute_id: 'BWBR0042124' });

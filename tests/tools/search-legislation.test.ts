@@ -1,13 +1,17 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import Database from '@ansvar/mcp-sqlite';
+import type Database from '@ansvar/mcp-sqlite';
 import { createTestDatabase, closeTestDatabase } from '../fixtures/test-db.js';
-import { searchLegislation, type SearchLegislationInput } from '../../src/tools/search-legislation.js';
+import { searchLegislation } from '../../src/tools/search-legislation.js';
 
 describe('searchLegislation', () => {
   let db: InstanceType<typeof Database>;
 
-  beforeAll(() => { db = createTestDatabase(); });
-  afterAll(() => { closeTestDatabase(db); });
+  beforeAll(() => {
+    db = createTestDatabase();
+  });
+  afterAll(() => {
+    closeTestDatabase(db);
+  });
 
   it('should return results and metadata', async () => {
     const result = await searchLegislation(db, { query: 'onrechtmatige daad' });
@@ -104,7 +108,7 @@ describe('searchLegislation', () => {
   it('should find Criminal Code provisions', async () => {
     const result = await searchLegislation(db, { query: 'diefstal' });
     expect(result.results.length).toBeGreaterThan(0);
-    const match = result.results.find(r => r.provision_ref === '310');
+    const match = result.results.find((r) => r.provision_ref === '310');
     expect(match).toBeDefined();
     expect(match!.document_id).toBe('BWBR0001854');
     expect(match!.book).toBeNull();
