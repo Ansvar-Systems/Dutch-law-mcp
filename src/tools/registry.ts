@@ -408,10 +408,16 @@ export function registerTools(server: Server, getDb: () => InstanceType<typeof D
           validateInput(name, a, [COMMON_FIELDS.query(), COMMON_FIELDS.limit]);
           result = await searchLegislation(getDb(), a as unknown as SearchLegislationInput);
           break;
-        case 'get_provision':
-          validateInput(name, a, [COMMON_FIELDS.document_id()]);
-          result = await getProvision(getDb(), a as unknown as GetProvisionInput);
+        case 'get_provision': {
+          // Accept 'law' as an alias for 'document_id' (used by fleet audit and some agents).
+          const provisionArgs = { ...a } as Record<string, unknown>;
+          if (!provisionArgs['document_id'] && provisionArgs['law']) {
+            provisionArgs['document_id'] = provisionArgs['law'];
+          }
+          validateInput(name, provisionArgs, [COMMON_FIELDS.document_id()]);
+          result = await getProvision(getDb(), provisionArgs as unknown as GetProvisionInput);
           break;
+        }
         case 'search_case_law':
           result = await searchCaseLaw(getDb(), a as unknown as SearchCaseLawInput);
           break;

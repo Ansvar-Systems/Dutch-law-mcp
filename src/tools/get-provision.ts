@@ -1,6 +1,7 @@
 import type { Database } from '@ansvar/mcp-sqlite';
 import { normalizeAsOfDate } from '../utils/as-of-date.js';
 import { generateResponseMetadata, type ToolResponse } from '../utils/metadata.js';
+import { resolveDocumentId } from '../utils/document-id.js';
 
 export interface GetProvisionInput {
   document_id: string;
@@ -122,7 +123,8 @@ export async function getProvision(
   db: Database,
   input: GetProvisionInput,
 ): Promise<ToolResponse<GetProvisionResult[]>> {
-  const { document_id } = input;
+  // Resolve abbreviations, short names, and full titles to a DB document ID.
+  const document_id = resolveDocumentId(db, input.document_id) ?? input.document_id;
   const asOfDate = normalizeAsOfDate(input.as_of_date);
   const provisionRef = buildProvisionRef(input);
 

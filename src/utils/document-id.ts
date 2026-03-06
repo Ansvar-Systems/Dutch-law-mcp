@@ -23,6 +23,8 @@ const ABBREVIATIONS: Record<string, string> = {
   WOR: 'BWBR0002747',
   WVW: 'BWBR0006622',
   UAVG: 'BWBR0042124',
+  AVG: 'BWBR0042124',
+  GDPR: 'BWBR0042124',
   WBP: 'BWBR0011823',
 };
 
