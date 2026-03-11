@@ -3,6 +3,7 @@ import { buildFtsQueryVariants } from '../utils/fts-query.js';
 import { normalizeAsOfDate } from '../utils/as-of-date.js';
 import { resolveDocumentId } from '../utils/document-id.js';
 import { generateResponseMetadata, type ToolResponse } from '../utils/metadata.js';
+import { withSqliteLockRetry } from '../utils/sqlite-retry.js';
 
 export interface SearchLegislationInput {
   query: string;
@@ -173,6 +174,8 @@ export async function searchLegislation(
   if (!variants.primary) {
     return { results: [], _metadata: generateResponseMetadata(db) };
   }
+  const primaryQuery = variants.primary;
+  const fallbackQuery = variants.fallback;
 
   // Resolve document_id from title if provided
   let resolvedDocId: string | undefined;
@@ -194,11 +197,11 @@ export async function searchLegislation(
     ? (q: string) => runVersionedFtsSearch(db, q, asOfDate, resolvedDocId, status, fetchLimit)
     : (q: string) => runFtsSearch(db, q, resolvedDocId, status, fetchLimit);
 
-  let results = search(variants.primary);
+  let results = await withSqliteLockRetry(() => search(primaryQuery));
   let broadened = false;
 
-  if (results.length === 0 && variants.fallback) {
-    results = search(variants.fallback);
+  if (results.length === 0 && fallbackQuery) {
+    results = await withSqliteLockRetry(() => search(fallbackQuery));
     broadened = results.length > 0;
   }
 

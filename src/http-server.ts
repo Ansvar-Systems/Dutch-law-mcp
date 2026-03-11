@@ -22,6 +22,7 @@ import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 
 import { createServer, openDb, SERVER_NAME, SERVER_VERSION } from './index.js';
 import { ensureDatabase } from './utils/ensure-database.js';
+import { prepareRuntimeDatabase } from './utils/runtime-db.js';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -224,7 +225,12 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     });
 
     const server = createServer(getDb);
+    let sessionClosed = false;
     transport.onclose = () => {
+      if (sessionClosed) {
+        return;
+      }
+      sessionClosed = true;
       const sid = transport.sessionId;
       if (sid && sessions.has(sid)) {
         sessions.delete(sid);
@@ -270,9 +276,10 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
 
 async function main(): Promise<void> {
   // Ensure database exists (downloads if needed)
-  const dbPath = await ensureDatabase();
-  dbInstance = openDb(dbPath);
-  console.error(`[${SERVER_NAME}] Database loaded from ${dbPath}`);
+  const sourceDbPath = await ensureDatabase();
+  const runtimeDbPath = prepareRuntimeDatabase(sourceDbPath);
+  dbInstance = openDb(runtimeDbPath);
+  console.error(`[${SERVER_NAME}] Database loaded from ${runtimeDbPath} (source: ${sourceDbPath})`);
 
   const httpServer = http.createServer((req, res) => {
     handleRequest(req, res).catch((err: unknown) => {

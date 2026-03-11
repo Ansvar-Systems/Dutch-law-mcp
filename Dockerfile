@@ -83,7 +83,7 @@ EXPOSE 3000
 
 # Health check: use HTTP endpoint in HTTP mode, file check in stdio mode
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD if [ "$MODE" = "http" ]; then curl -f http://localhost:${PORT}/health || exit 1; else node -e "require('fs').accessSync('dist/index.js')" || exit 1; fi
+    CMD if [ "$MODE" = "http" ]; then curl -f http://127.0.0.1:${PORT}/health || exit 1; else node -e "require('fs').accessSync('dist/index.js')" || exit 1; fi
 
 # Entry point: select mode via shell
 ENTRYPOINT ["sh", "-c", "if [ \"$MODE\" = \"http\" ]; then exec node dist/http-server.js; else exec node dist/index.js; fi"]

@@ -14,7 +14,7 @@
   ],
   "scripts": {
     "build": "tsc",
-    "build:db": "tsx scripts/build-db.ts",
+    "build:db": "npm run import:eurlex-documents && tsx scripts/build-db.ts",
     "build:db:free": "tsx scripts/build-db-free.ts",
     "build:db:paid": "tsx scripts/build-db-paid.ts",
     "dev": "tsx src/index.ts",

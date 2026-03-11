@@ -40,9 +40,7 @@ let dbCapabilities: Set<Capability> | null = null;
 let dbMetadata: DbMetadata | null = null;
 
 export function openDb(dbPath: string): InstanceType<typeof Database> {
-  const db = new Database(dbPath, { readonly: true });
-  db.pragma('journal_mode = WAL', { simple: true });
-  return db;
+  return new Database(dbPath, { readonly: true });
 }
 
 function getDb(): InstanceType<typeof Database> {
@@ -184,8 +182,11 @@ process.on('SIGTERM', () => {
   process.exit(0);
 });
 
-main().catch((error: unknown) => {
-  console.error(`[${SERVER_NAME}] Fatal error:`, error);
-  closeDb();
-  process.exit(1);
-});
+const entryPath = process.argv[1] ? path.resolve(process.argv[1]) : null;
+if (entryPath === __filename) {
+  main().catch((error: unknown) => {
+    console.error(`[${SERVER_NAME}] Fatal error:`, error);
+    closeDb();
+    process.exit(1);
+  });
+}
