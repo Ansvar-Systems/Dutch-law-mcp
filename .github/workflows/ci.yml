@@ -138,6 +138,7 @@ jobs:
           node-version: '22'
           cache: 'npm'
       - run: npm ci --ignore-scripts
+      - run: bash scripts/download-db.sh
       - run: npm run build
       - name: Run contract tests
         run: npm run test:contract
@@ -154,6 +155,7 @@ jobs:
           node-version: '22'
           cache: 'npm'
       - run: npm ci --ignore-scripts
+      - run: bash scripts/download-db.sh
       - run: npm run build
       - name: Run nightly contract tests
         run: CONTRACT_MODE=nightly npm run test:contract
