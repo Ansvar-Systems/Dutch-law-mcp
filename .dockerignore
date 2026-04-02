@@ -22,6 +22,7 @@ vitest.config.ts
 
 # Scripts (only needed for development/ingestion)
 scripts
+!scripts/download-db.sh
 
 # Documentation
 docs
