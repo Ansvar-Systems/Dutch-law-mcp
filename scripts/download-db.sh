@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Download pre-built database from GitHub Releases.
 #
 # Use this instead of running slow government API ingestion locally.
@@ -6,14 +6,15 @@
 # workflow on every tagged release.
 #
 # Usage:
-#   bash scripts/download-db.sh           # download latest release
-#   bash scripts/download-db.sh v1.2.0    # download specific version
+#   sh scripts/download-db.sh           # download latest release
+#   sh scripts/download-db.sh v1.2.0    # download specific version
 #
 # The script reads the repo name from package.json so it works
 # across all Law MCPs without modification.
-set -e
+set -eu
 
 TAG="${1:-}"
+FORCE="${2:-}"
 ASSET="database.db.gz"
 OUTPUT="data/database.db"
 
@@ -30,7 +31,7 @@ if [ -z "$REPO" ] || [ "$REPO" = "undefined" ]; then
 fi
 
 # Skip if already exists (unless --force)
-if [ -f "$OUTPUT" ] && [ "$2" != "--force" ]; then
+if [ -f "$OUTPUT" ] && [ "$FORCE" != "--force" ]; then
   SIZE=$(ls -lh "$OUTPUT" | awk '{print $5}')
   echo "[download-db] Database already exists at $OUTPUT ($SIZE), skipping"
   echo "[download-db] Use --force as second argument to re-download"

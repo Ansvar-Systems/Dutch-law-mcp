@@ -38,8 +38,8 @@ LABEL org.opencontainers.image.documentation="https://github.com/Ansvar-Systems/
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 LABEL org.opencontainers.image.version="1.2.1"
 
-# Install curl for HTTP health checks
-RUN apk add --no-cache curl
+# Install curl/gzip for HTTP health checks and release DB download
+RUN apk add --no-cache curl gzip
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S mcpserver && \
@@ -69,8 +69,27 @@ RUN npm ci --omit=dev && \
 # Copy built artifacts from builder stage
 COPY --from=builder /build/dist ./dist
 
-# Copy database (baked in at build time — NOT downloaded at runtime)
-COPY data/database.db ./data/database.db
+# Fetch release database during image build so the image is query-ready
+COPY scripts/download-db.sh /app/scripts/download-db.sh
+RUN chmod +x /app/scripts/download-db.sh && sh /app/scripts/download-db.sh
+RUN node --input-type=module - <<'NODE'
+import Database from '@ansvar/mcp-sqlite';
+import { searchLegislation } from './dist/tools/search-legislation.js';
+const db = new Database('./data/database.db', { readonly: true });
+const tables = new Set(
+  db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(row => row.name)
+);
+for (const table of ['legal_documents', 'legal_provisions', 'provisions_fts']) {
+  if (!tables.has(table)) {
+    throw new Error(`Missing required table: ${table}`);
+  }
+}
+const result = await searchLegislation(db, { query: 'persoonsgegevens', limit: 1 });
+if (!result.results.length) {
+  throw new Error('Search smoke test returned no Dutch law results');
+}
+db.close();
+NODE
 
 # Change ownership to non-root user
 RUN chown -R mcpserver:mcpserver /app
