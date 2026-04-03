@@ -1,0 +1,75 @@
+# =============================================================================
+# Law MCP GHCR Build -- Build Docker image and push to GitHub Container Registry
+# =============================================================================
+#
+# Triggered on push to main and on manual dispatch.
+# Pushes :latest and :sha-XXXXXXX tags.
+#
+# NOTE: This builds the base (free-tier) law MCP image.
+# Premium tools (case law, preparatory works, agency guidance) are injected
+# at build time on the Hetzner prod server via the separate premium build
+# pipeline. The prod server runs LOCAL images (law-mcp-*:latest), not GHCR
+# images -- Watchtower does NOT update law MCPs from GHCR.
+#
+# This GHCR image is used by:
+# - mcp.ansvar.eu (public MCP server)
+# - npm package consumers who prefer Docker over npm
+# =============================================================================
+
+name: Build and Push to GHCR
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: dutch-law-mcp
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    name: Build and Push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/ansvar-systems/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+            type=sha,prefix=sha-,format=short
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
