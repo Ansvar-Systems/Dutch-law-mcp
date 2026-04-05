@@ -37,11 +37,16 @@ function clampLimit(limit: number | undefined): number {
   return Math.max(1, Math.min(limit, MAX_LIMIT));
 }
 
+function ecliToUrl(ecli: string | null): string | null {
+  if (ecli) return `https://uitspraken.rechtspraak.nl/details?id=${encodeURIComponent(ecli)}`;
+  return null;
+}
+
 function lookupByEcli(db: Database, ecli: string): SearchCaseLawResult[] {
   const sql = `
     SELECT
       cl.document_id,
-      d.title AS document_title,
+      cl.case_number AS document_title,
       cl.ecli,
       cl.court,
       cl.case_number,
@@ -50,13 +55,12 @@ function lookupByEcli(db: Database, ecli: string): SearchCaseLawResult[] {
       cl.legal_domain,
       cl.summary,
       NULL AS snippet,
-      NULL AS relevance,
-      d.url
+      NULL AS relevance
     FROM case_law AS cl
-    JOIN legal_documents AS d ON cl.document_id = d.id
     WHERE cl.ecli = ?
   `;
-  return db.prepare(sql).all(ecli) as SearchCaseLawResult[];
+  const rows = db.prepare(sql).all(ecli) as SearchCaseLawResult[];
+  return rows.map((r) => ({ ...r, url: ecliToUrl(r.ecli) }));
 }
 
 function runFtsSearch(
@@ -105,7 +109,7 @@ function runFtsSearch(
   const sql = `
     SELECT
       cl.document_id,
-      d.title AS document_title,
+      cl.case_number AS document_title,
       cl.ecli,
       cl.court,
       cl.case_number,
@@ -114,18 +118,17 @@ function runFtsSearch(
       cl.legal_domain,
       cl.summary,
       snippet(case_law_fts, 0, '**', '**', '...', 32) AS snippet,
-      bm25(case_law_fts) AS relevance,
-      d.url
+      bm25(case_law_fts) AS relevance
     FROM case_law_fts
     JOIN case_law AS cl ON case_law_fts.rowid = cl.id
-    JOIN legal_documents AS d ON cl.document_id = d.id
     ${whereClause}
     ORDER BY bm25(case_law_fts)
     LIMIT ?
   `;
   params.push(limit);
 
-  return db.prepare(sql).all(...params) as SearchCaseLawResult[];
+  const rows = db.prepare(sql).all(...params) as SearchCaseLawResult[];
+  return rows.map((r) => ({ ...r, url: ecliToUrl(r.ecli) }));
 }
 
 export async function searchCaseLaw(
@@ -158,10 +161,28 @@ export async function searchCaseLaw(
     return { results: [], _metadata: generateResponseMetadata(db) };
   }
 
-  let results = runFtsSearch(db, variants.primary, court, legal_domain, procedure_type, date_from, date_to, limit);
+  let results = runFtsSearch(
+    db,
+    variants.primary,
+    court,
+    legal_domain,
+    procedure_type,
+    date_from,
+    date_to,
+    limit,
+  );
 
   if (results.length === 0 && variants.fallback) {
-    results = runFtsSearch(db, variants.fallback, court, legal_domain, procedure_type, date_from, date_to, limit);
+    results = runFtsSearch(
+      db,
+      variants.fallback,
+      court,
+      legal_domain,
+      procedure_type,
+      date_from,
+      date_to,
+      limit,
+    );
   }
 
   return { results, _metadata: generateResponseMetadata(db) };
