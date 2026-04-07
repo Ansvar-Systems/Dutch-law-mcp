@@ -111,4 +111,5 @@ function getDataFreshness(db: Database): DataFreshness {
 export interface ToolResponse<T> {
   results: T;
   _metadata: ResponseMetadata;
+  _citation?: import('./citation.js').CitationMetadata;
 }
