@@ -1,26 +1,26 @@
 # =============================================================================
-# Law MCP GHCR Build -- Build Docker image and push to GitHub Container Registry
+# MCP GHCR Build — Build Docker image and push to GitHub Container Registry
 # =============================================================================
 #
-# Triggered on push to main and on manual dispatch.
-# Pushes :latest and :sha-XXXXXXX tags.
+# Triggered on push to main or dev, and on manual dispatch.
+# - main: pushes :latest and :sha-XXXXXXX tags
+# - dev:  pushes :dev and :sha-XXXXXXX tags
 #
-# NOTE: This builds the base (free-tier) law MCP image.
-# Premium tools (case law, preparatory works, agency guidance) are injected
-# at build time on the Hetzner prod server via the separate premium build
-# pipeline. The prod server runs LOCAL images (law-mcp-*:latest), not GHCR
-# images -- Watchtower does NOT update law MCPs from GHCR.
+# Watchtower on the Hetzner prod server polls GHCR every 6 hours and
+# automatically restarts containers when a new :latest image is detected.
+# No manual deploy step needed.
 #
-# This GHCR image is used by:
-# - mcp.ansvar.eu (public MCP server)
-# - npm package consumers who prefer Docker over npm
+# PREREQUISITES:
+# 1. Repository must have a Dockerfile at the root (or specify path)
+# 2. GITHUB_TOKEN has automatic write:packages permission (no secrets needed)
+#
 # =============================================================================
 
 name: Build and Push to GHCR
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   workflow_dispatch:
 
 concurrency:
@@ -61,6 +61,7 @@ jobs:
           images: ${{ env.REGISTRY }}/ansvar-systems/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+            type=raw,value=dev,enable=${{ github.ref == 'refs/heads/dev' }}
             type=sha,prefix=sha-,format=short
 
       - name: Build and push
@@ -73,3 +74,15 @@ jobs:
           platforms: linux/amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## GHCR Build" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Image | \`${{ env.REGISTRY }}/ansvar-systems/${{ env.IMAGE_NAME }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Tags | $(echo '${{ steps.meta.outputs.tags }}' | tr '\n' ', ') |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Branch | \`${{ github.ref_name }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Commit | \`${{ github.sha }}\` |" >> "$GITHUB_STEP_SUMMARY"
