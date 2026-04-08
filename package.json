@@ -55,7 +55,6 @@
   "devDependencies": {
     "@eslint/js": "^9.27.0",
     "@types/node": "^22.15.29",
-    "@vercel/node": "^5.6.3",
     "@vitest/coverage-v8": "^4.0.18",
     "eslint": "^9.27.0",
     "fast-xml-parser": "^5.3.5",

@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "dutch-law-mcp",
   "display_name": "Dutch Law MCP Server",
-  "version": "1.0.0",
+  "version": "1.2.1",
   "description": "Production-grade Dutch legal research MCP server with comprehensive statute coverage and EU law cross-references",
   "author": {
     "name": "Ansvar Systems",
@@ -52,7 +52,8 @@
     { "name": "search_eu_implementations" },
     { "name": "get_provision_eu_basis" },
     { "name": "validate_eu_compliance" },
-    { "name": "get_provision_at_date" }
+    { "name": "get_provision_at_date" },
+    { "name": "list_sources" }
   ],
   "compatibility": {
     "platforms": ["darwin", "win32", "linux"],
