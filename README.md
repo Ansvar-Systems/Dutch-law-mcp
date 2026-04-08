@@ -199,7 +199,7 @@ Wetten.overheid.nl BWB API → Parse → SQLite → FTS5 snippet() → MCP respo
 
 ---
 
-## Available Tools (13)
+## Available Tools (15)
 
 ### Core Legal Research Tools (8)
 
@@ -223,6 +223,13 @@ Wetten.overheid.nl BWB API → Parse → SQLite → FTS5 snippet() → MCP respo
 | `search_eu_implementations` | Search EU documents with Dutch implementation counts          |
 | `get_provision_eu_basis`    | Get EU law references for a specific provision                |
 | `validate_eu_compliance`    | Check implementation status (requires EU MCP)                 |
+
+### History & Metadata Tools (2)
+
+| Tool                    | Description                                                     |
+| ----------------------- | --------------------------------------------------------------- |
+| `get_provision_at_date` | Retrieve a provision as it was at a specific historical date    |
+| `list_sources`          | List data sources with provenance, coverage, and freshness info |
 
 ---
 

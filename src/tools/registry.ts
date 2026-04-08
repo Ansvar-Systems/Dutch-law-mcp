@@ -410,9 +410,13 @@ export function registerTools(server: Server, getDb: () => InstanceType<typeof D
           break;
         case 'get_provision': {
           // Accept 'law' as an alias for 'document_id' (used by fleet audit and some agents).
+          // Accept 'section' as an alias for 'article' (used by fleet contract tests).
           const provisionArgs = { ...a } as Record<string, unknown>;
           if (!provisionArgs['document_id'] && provisionArgs['law']) {
             provisionArgs['document_id'] = provisionArgs['law'];
+          }
+          if (!provisionArgs['article'] && provisionArgs['section']) {
+            provisionArgs['article'] = provisionArgs['section'];
           }
           validateInput(name, provisionArgs, [COMMON_FIELDS.document_id()]);
           result = await getProvision(getDb(), provisionArgs as unknown as GetProvisionInput);

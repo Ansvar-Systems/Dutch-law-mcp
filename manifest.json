@@ -52,7 +52,8 @@
     { "name": "search_eu_implementations" },
     { "name": "get_provision_eu_basis" },
     { "name": "validate_eu_compliance" },
-    { "name": "get_provision_at_date" }
+    { "name": "get_provision_at_date" },
+    { "name": "list_sources" }
   ],
   "compatibility": {
     "platforms": ["darwin", "win32", "linux"],
