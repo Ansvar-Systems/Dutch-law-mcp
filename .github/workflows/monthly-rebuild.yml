@@ -1,0 +1,75 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# MONTHLY DATABASE REBUILD WORKFLOW
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Triggers a full database rebuild on the first Monday of each month.
+# This ensures the bundled database stays current with upstream sources
+# (wetten.overheid.nl, rechtspraak.nl, EUR-Lex) even between releases.
+#
+# ═══════════════════════════════════════════════════════════════════════════
+
+name: Monthly Rebuild
+
+on:
+  schedule:
+    # First day of each month at 02:00 UTC
+    - cron: '0 2 1 * *'
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: 'Database tier to rebuild'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - free
+          - paid
+
+concurrency:
+  group: monthly-rebuild
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build TypeScript
+        run: npm run build
+
+      - name: Build free-tier database
+        if: ${{ github.event.inputs.tier == 'all' || github.event.inputs.tier == 'free' || github.event_name == 'schedule' }}
+        run: npm run build:db:free
+
+      - name: Build paid-tier database
+        if: ${{ github.event.inputs.tier == 'all' || github.event.inputs.tier == 'paid' || github.event_name == 'schedule' }}
+        run: npm run build:db:paid
+
+      - name: Run tests against rebuilt database
+        run: npm test
+
+      - name: Upload rebuilt databases as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rebuilt-databases-${{ github.run_id }}
+          path: |
+            data/database.db
+            data/database-free.db
+          retention-days: 7
