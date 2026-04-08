@@ -48,8 +48,8 @@ function getDb(): InstanceType<typeof Database> {
 // Session management
 // ---------------------------------------------------------------------------
 
-const MAX_SESSIONS = 100;
-const SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes
+const MAX_SESSIONS = parseInt(process.env.MAX_SESSIONS ?? '100', 10);
+const SESSION_IDLE_TTL_MS = parseInt(process.env.SESSION_IDLE_TTL_MS ?? '900000', 10); // 15 min idle
 
 interface SessionEntry {
   transport: StreamableHTTPServerTransport;
@@ -68,21 +68,17 @@ function safeSessionId(raw: string | undefined): string | undefined {
   return raw;
 }
 
-/** Evict expired sessions to prevent unbounded memory growth. */
-function evictStaleSessions(): void {
-  const now = Date.now();
+/** Evict idle sessions to prevent unbounded memory growth. */
+function evictIdleSessions(): void {
+  const cutoff = Date.now() - SESSION_IDLE_TTL_MS;
   for (const [sid, entry] of sessions) {
-    if (now - entry.lastActivity > SESSION_TTL_MS) {
+    if (entry.lastActivity < cutoff) {
       entry.transport.close().catch(() => {});
       sessions.delete(sid);
       console.error(`[${SERVER_NAME}] Session ${sid} expired (TTL)`);
     }
   }
 }
-
-// Run eviction every 5 minutes
-const evictionInterval = setInterval(evictStaleSessions, 5 * 60 * 1000);
-evictionInterval.unref();
 
 // ---------------------------------------------------------------------------
 // CORS headers
@@ -209,14 +205,12 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       return;
     }
 
-    // Enforce max sessions
+    // Enforce max sessions — evict idle sessions first
+    evictIdleSessions();
     if (sessions.size >= MAX_SESSIONS) {
-      evictStaleSessions();
-      if (sessions.size >= MAX_SESSIONS) {
-        res.writeHead(503, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Too many active sessions. Try again later.' }));
-        return;
-      }
+      res.writeHead(429, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Too many active sessions. Try again later.' }));
+      return;
     }
 
     // Create new transport + server for this session
@@ -301,7 +295,7 @@ async function main(): Promise<void> {
   const shutdown = (signal: string) => {
     console.error(`[${SERVER_NAME}] Shutting down (${signal})...`);
 
-    clearInterval(evictionInterval);
+    evictIdleSessions();
 
     // Close all active sessions
     for (const [, entry] of sessions) {
