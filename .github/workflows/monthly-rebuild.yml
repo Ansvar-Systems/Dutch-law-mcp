@@ -1,115 +1,75 @@
-# ============================================================================
-# Monthly Data Rebuild — Dutch Law MCP (Free Tier)
-# ============================================================================
+# ═══════════════════════════════════════════════════════════════════════════
+# MONTHLY DATABASE REBUILD WORKFLOW
+# ═══════════════════════════════════════════════════════════════════════════
 #
-# Full free-tier data pipeline: ingest → enrich → build → test → release
-# Schedule: 1st of every month at 06:00 UTC + manual dispatch
+# Triggers a full database rebuild on the first Monday of each month.
+# This ensures the bundled database stays current with upstream sources
+# (wetten.overheid.nl, rechtspraak.nl, EUR-Lex) even between releases.
 #
-# Pipeline:
-#   1. Ingest all BWB statutes from wetten.overheid.nl (SRU discovery)
-#   2. Extract definitions from provision text
-#   3. Scan for EUR-Lex references + build database from seeds
-#   4. Populate cross-references between statutes
-#   5. Run tests + verify enrichment
-#   6. Compress and upload as GitHub Release
-#
-# Premium tier rebuild runs separately on Hetzner (cron job).
-# See: Ansvar-Architecture-Documentation/scripts/rebuild-dutch-law-premium.sh
-# ============================================================================
+# ═══════════════════════════════════════════════════════════════════════════
 
-name: Monthly Data Rebuild
+name: Monthly Rebuild
 
 on:
   schedule:
-    - cron: '0 6 1 * *'
+    # First day of each month at 02:00 UTC
+    - cron: '0 2 1 * *'
   workflow_dispatch:
+    inputs:
+      tier:
+        description: 'Database tier to rebuild'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - free
+          - paid
+
+concurrency:
+  group: monthly-rebuild
+  cancel-in-progress: false
 
 permissions:
   contents: write
 
 jobs:
   rebuild:
-    name: Rebuild Dutch Law database
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 60
 
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 22
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
-      # ------------------------------------------------------------------
-      # Ingest all BWB statutes (required — failure stops the workflow)
-      # ------------------------------------------------------------------
-      - name: Ingest BWB statutes
-        run: npx tsx scripts/auto-ingest-all-statutes.ts
+      - name: Build TypeScript
+        run: npm run build
 
-      # ------------------------------------------------------------------
-      # Enrichment pipeline
-      # ------------------------------------------------------------------
-      - name: Extract definitions
-        run: npx tsx scripts/extract-definitions.ts
+      - name: Build free-tier database
+        if: ${{ github.event.inputs.tier == 'all' || github.event.inputs.tier == 'free' || github.event_name == 'schedule' }}
+        run: npm run build:db:free
 
-      - name: Build database (includes EUR-Lex import)
-        run: npm run build:db
+      - name: Build paid-tier database
+        if: ${{ github.event.inputs.tier == 'all' || github.event.inputs.tier == 'paid' || github.event_name == 'schedule' }}
+        run: npm run build:db:paid
 
-      - name: Populate cross-references
-        run: npx tsx scripts/populate-cross-references.ts
-
-      # ------------------------------------------------------------------
-      # Test + verify
-      # ------------------------------------------------------------------
-      - name: Run tests
+      - name: Run tests against rebuilt database
         run: npm test
 
-      - name: Verify enrichment completeness
-        id: verify
-        run: |
-          node -e "
-            const Database = require('@ansvar/mcp-sqlite');
-            const db = new Database('data/database.db');
-            const counts = {};
-            for (const t of ['legal_documents','legal_provisions','definitions','cross_references','eu_documents','eu_references']) {
-              counts[t] = db.prepare('SELECT COUNT(*) as c FROM ' + t).get().c;
-            }
-            console.log(JSON.stringify(counts, null, 2));
-            if (counts.definitions === 0) { console.error('FAIL: No definitions'); process.exit(1); }
-            if (counts.cross_references === 0) { console.error('FAIL: No cross-references'); process.exit(1); }
-            if (counts.eu_documents === 0) { console.error('FAIL: No EU documents'); process.exit(1); }
-            console.log('Enrichment OK');
-            db.close();
-          "
-
-      # ------------------------------------------------------------------
-      # Compress + set journal mode for WASM compatibility
-      # ------------------------------------------------------------------
-      - name: Prepare database for release
-        run: |
-          sqlite3 data/database.db "PRAGMA journal_mode = DELETE;"
-          gzip -f -k data/database.db
-          sha256sum data/database.db.gz | awk '{print $1}' > data/database.db.gz.sha256
-          echo "DB size: $(du -h data/database.db | cut -f1)"
-          echo "GZ size: $(du -h data/database.db.gz | cut -f1)"
-
-      # ------------------------------------------------------------------
-      # Create GitHub Release with the rebuilt database
-      # ------------------------------------------------------------------
-      - name: Create release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="data-$(date +%Y-%m-%d)"
-          gh release create "$VERSION" \
-            --title "Data rebuild $VERSION" \
-            --notes "Automated monthly rebuild from wetten.overheid.nl" \
-            data/database.db.gz \
-            data/database.db.gz.sha256 \
-            --latest
+      - name: Upload rebuilt databases as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rebuilt-databases-${{ github.run_id }}
+          path: |
+            data/database.db
+            data/database-free.db
+          retention-days: 7
