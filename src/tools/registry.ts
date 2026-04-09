@@ -31,6 +31,8 @@ import { getProvisionEUBasis, type GetProvisionEUBasisInput } from './get-provis
 import { validateEUCompliance, type ValidateEUComplianceInput } from './validate-eu-compliance.js';
 import { getProvisionAtDate, type GetProvisionAtDateInput } from './get-provision-at-date.js';
 import { listSources, type ListSourcesInput } from './list-sources.js';
+import { about, type AboutInput } from './about.js';
+import { checkDataFreshness, type CheckDataFreshnessInput } from './check-data-freshness.js';
 import { validateInput, COMMON_FIELDS } from '../utils/validate-input.js';
 
 const READ_ONLY_ANNOTATIONS = {
@@ -375,6 +377,32 @@ export const TOOLS: Tool[] = [
       required: [],
     },
   },
+  {
+    name: 'about',
+    description:
+      'Return server identity, version, data sources, and runtime capabilities. Use this tool to discover what tier and capabilities are available (free vs professional), which data sources are bundled, and the server version. Equivalent to reading the MCP resource `case-law-stats://dutch-law-mcp/metadata` but callable as a tool.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: 'check_data_freshness',
+    description:
+      'Check the freshness (age) of each data source in the bundled database. Returns last-updated timestamps and a fresh/stale/unknown status per source (statutes, case_law, eu_references). Use this before relying on legal data for time-sensitive analysis. Staleness thresholds: statutes 30 days, case_law 14 days, eu_references 90 days.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        source: {
+          type: 'string',
+          description: 'Limit check to a single source. Omit to check all sources.',
+          enum: ['statutes', 'case_law', 'eu_references'],
+        },
+      },
+      required: [],
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -484,6 +512,12 @@ export function registerTools(server: Server, getDb: () => InstanceType<typeof D
           break;
         case 'list_sources':
           result = await listSources(getDb(), a as unknown as ListSourcesInput);
+          break;
+        case 'about':
+          result = await about(getDb(), a as unknown as AboutInput);
+          break;
+        case 'check_data_freshness':
+          result = await checkDataFreshness(getDb(), a as unknown as CheckDataFreshnessInput);
           break;
         default:
           return {
