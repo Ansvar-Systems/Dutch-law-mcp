@@ -10,9 +10,8 @@ import type Database from '@ansvar/mcp-sqlite';
 import { detectCapabilities, readDbMetadata } from '../capabilities.js';
 import { SERVER_NAME, SERVER_VERSION } from '../version.js';
 
-export interface AboutInput {
-  // No required inputs — tool returns static + runtime info.
-}
+// No required inputs — tool returns static + runtime info.
+export type AboutInput = Record<string, never>;
 
 export async function about(
   db: InstanceType<typeof Database>,
