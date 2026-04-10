@@ -412,7 +412,10 @@ function readSeedFiles(): SeedFile[] {
     return [];
   }
 
-  const files = fs.readdirSync(SEED_DIR).filter((f) => f.endsWith('.json')).sort();
+  const files = fs
+    .readdirSync(SEED_DIR)
+    .filter((f) => f.endsWith('.json'))
+    .sort();
   const seeds: SeedFile[] = [];
 
   for (const file of files) {
@@ -423,7 +426,8 @@ function readSeedFiles(): SeedFile[] {
       seeds.push(parsed);
       console.log(`  Read ${file}`);
     } catch (err) {
-      console.error(`  WARNING: Failed to parse ${file}: ${err}`);
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`  WARNING: Failed to parse ${file}: ${message}`);
     }
   }
 
@@ -615,7 +619,10 @@ function main(): void {
 
       // Provision versions — use explicit versions if available,
       // otherwise copy current provisions as a single "current" version
-      const versionSource = seed.provision_versions ?? seed.provisions;
+      const versionSource: ProvisionVersionSeed[] =
+        seed.provision_versions ??
+        seed.provisions?.map((provision): ProvisionVersionSeed => ({ ...provision })) ??
+        [];
       if (versionSource) {
         for (const ver of versionSource) {
           insertProvVer.run({
@@ -743,6 +750,12 @@ function main(): void {
     console.log(`  Cross references:    ${xrefCount}`);
     console.log(`  EU documents:        ${euDocCount}`);
     console.log(`  EU references:       ${euRefCount}`);
+
+    if (euDocCount === 0 || euRefCount === 0) {
+      throw new Error(
+        'EU cross-reference data is empty. Run "npm run import:eurlex-documents" and rebuild the database before releasing it.',
+      );
+    }
   });
 
   insertAll();

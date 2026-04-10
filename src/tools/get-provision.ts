@@ -2,11 +2,13 @@ import type { Database } from '@ansvar/mcp-sqlite';
 import { normalizeAsOfDate } from '../utils/as-of-date.js';
 import { generateResponseMetadata, type ToolResponse } from '../utils/metadata.js';
 import { resolveDocumentId } from '../utils/document-id.js';
+import { buildProvisionCitation } from '../utils/citation.js';
 
 export interface GetProvisionInput {
   document_id: string;
   book?: string;
   article?: string;
+  section?: string;
   provision_ref?: string;
   as_of_date?: string;
 }
@@ -132,5 +134,21 @@ export async function getProvision(
     ? getVersionedProvisions(db, document_id, provisionRef, asOfDate)
     : getCurrentProvisions(db, document_id, provisionRef);
 
-  return { results, _metadata: generateResponseMetadata(db) };
+  const firstResult = results.length > 0 ? results[0] : null;
+  return {
+    results,
+    ...(provisionRef &&
+      firstResult && {
+        _citation: buildProvisionCitation(
+          firstResult.document_id,
+          firstResult.document_title || '',
+          firstResult.provision_ref || '',
+          input.document_id,
+          input.section || input.provision_ref || input.article || '',
+          null,
+          null,
+        ),
+      }),
+    _metadata: generateResponseMetadata(db),
+  };
 }

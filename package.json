@@ -14,7 +14,7 @@
   ],
   "scripts": {
     "build": "tsc",
-    "build:db": "tsx scripts/build-db.ts",
+    "build:db": "npm run import:eurlex-documents && tsx scripts/build-db.ts",
     "build:db:free": "tsx scripts/build-db-free.ts",
     "build:db:paid": "tsx scripts/build-db-paid.ts",
     "dev": "tsx src/index.ts",
@@ -23,7 +23,7 @@
     "start:http": "node dist/http-server.js",
     "prepare-release": "node scripts/prepare-release.js",
     "test": "vitest run",
-    "test:contract": "vitest run --include '__tests__/contract/**/*.test.ts'",
+    "test:contract": "vitest run --config vitest.contract.config.ts",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "download:db": "bash scripts/download-db.sh",
@@ -55,7 +55,6 @@
   "devDependencies": {
     "@eslint/js": "^9.27.0",
     "@types/node": "^22.15.29",
-    "@vercel/node": "^5.6.3",
     "@vitest/coverage-v8": "^4.0.18",
     "eslint": "^9.27.0",
     "fast-xml-parser": "^5.3.5",

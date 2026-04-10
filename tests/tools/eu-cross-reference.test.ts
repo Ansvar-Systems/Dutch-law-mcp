@@ -181,6 +181,14 @@ describe('EU Cross-Reference Tools', () => {
       expect(avg).toBeDefined();
     });
 
+    it('should match directive-like identifier queries', async () => {
+      const result = await searchEUImplementations(db, {
+        query: 'Regulation (EU) 2016/679 implementation',
+      });
+      expect(result.results.documents.length).toBeGreaterThan(0);
+      expect(result.results.documents[0].id).toBe('regulation:2016/679');
+    });
+
     it('should filter by type', async () => {
       const result = await searchEUImplementations(db, { type: 'regulation' });
       expect(result.results.documents.length).toBe(1);
