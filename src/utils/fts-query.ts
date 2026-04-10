@@ -49,11 +49,15 @@ const DUTCH_LEGAL_STOPWORDS = new Set([
   'kan',
   'moet',
   'zal',
+  'deze',
+  'heeft',
   // ubiquitous legal terms that match the entire corpus
   'wet',
   'art',
   'lid',
   'nr',
+  // parliamentary-corpus specific — matches every Tweede Kamer proceeding
+  'kamer',
 ]);
 
 function sanitizeToken(token: string): string {

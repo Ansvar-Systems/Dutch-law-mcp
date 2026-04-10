@@ -19,6 +19,17 @@ describe('Dutch legal stopword filtering', () => {
       expect(DUTCH_LEGAL_STOPWORDS.has('lid')).toBe(true);
     });
 
+    it('should contain common auxiliary verbs and demonstratives', () => {
+      expect(DUTCH_LEGAL_STOPWORDS.has('deze')).toBe(true);
+      expect(DUTCH_LEGAL_STOPWORDS.has('heeft')).toBe(true);
+      expect(DUTCH_LEGAL_STOPWORDS.has('worden')).toBe(true);
+    });
+
+    it('should contain parliamentary-corpus specific terms', () => {
+      // "kamer" appears in every Tweede Kamer proceeding — broad match hazard
+      expect(DUTCH_LEGAL_STOPWORDS.has('kamer')).toBe(true);
+    });
+
     it('should NOT contain substantive legal terms', () => {
       expect(DUTCH_LEGAL_STOPWORDS.has('onrechtmatige')).toBe(false);
       expect(DUTCH_LEGAL_STOPWORDS.has('persoonsgegevens')).toBe(false);
