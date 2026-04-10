@@ -13,6 +13,10 @@ import type Database from '@ansvar/mcp-sqlite';
 import { searchLegislation, type SearchLegislationInput } from './search-legislation.js';
 import { getProvision, type GetProvisionInput } from './get-provision.js';
 import { searchCaseLaw, type SearchCaseLawInput } from './search-case-law.js';
+import {
+  searchParliamentaryProceedings,
+  type SearchParliamentaryProceedingsInput,
+} from './search-parliamentary-proceedings.js';
 import { getPreparatoryWorks, type GetPreparatoryWorksInput } from './get-preparatory-works.js';
 import { validateCitationTool, type ValidateCitationInput } from './validate-citation.js';
 import { buildLegalStance, type BuildLegalStanceInput } from './build-legal-stance.js';
@@ -149,6 +153,33 @@ export const TOOLS: Tool[] = [
         limit: { type: 'number', description: 'Max results (1-50, default 10)' },
       },
       required: [],
+    },
+  },
+  {
+    name: 'search_parliamentary_proceedings',
+    description:
+      'Search Dutch parliamentary proceedings (Tweede Kamer/Handelingen) from the ParlaMint-NL corpus. ' +
+      'Returns floor speeches, motions, and debate transcripts with speaker metadata. ' +
+      'Useful for understanding legislative intent, political debate context, and parliamentary questions on specific topics. ' +
+      'Supports FTS search with date range filters. ' +
+      'Note: this data covers Tweede Kamer speeches only, not Eerste Kamer. ' +
+      'Professional tier only — free tier returns an upgrade notice. Returns empty array when no results match.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        query: {
+          type: 'string',
+          description:
+            'Search terms in Dutch or English. Examples: "privacy persoonsgegevens", "energietransitie", "woningmarkt".',
+        },
+        date_from: {
+          type: 'string',
+          description: 'Start date filter (ISO format, e.g. "2020-01-01")',
+        },
+        date_to: { type: 'string', description: 'End date filter (ISO format, e.g. "2024-12-31")' },
+        limit: { type: 'number', description: 'Max results (1-50, default 10)' },
+      },
+      required: ['query'],
     },
   },
   {
@@ -452,6 +483,13 @@ export function registerTools(server: Server, getDb: () => InstanceType<typeof D
         }
         case 'search_case_law':
           result = await searchCaseLaw(getDb(), a as unknown as SearchCaseLawInput);
+          break;
+        case 'search_parliamentary_proceedings':
+          validateInput(name, a, [COMMON_FIELDS.query()]);
+          result = await searchParliamentaryProceedings(
+            getDb(),
+            a as unknown as SearchParliamentaryProceedingsInput,
+          );
           break;
         case 'get_preparatory_works':
           validateInput(name, a, [

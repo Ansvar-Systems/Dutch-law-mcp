@@ -171,6 +171,18 @@ export async function searchLegislation(
   const fetchLimit = limit * 2;
 
   const variants = buildFtsQueryVariants(query);
+  if (variants.tooBroad) {
+    return {
+      results: [],
+      _metadata: {
+        ...generateResponseMetadata(db),
+        note:
+          `Query too broad: "${query}" contains only common Dutch words. ` +
+          'Please provide at least one specific legal term ' +
+          '(e.g. "onrechtmatige daad" instead of "wet").',
+      },
+    };
+  }
   if (!variants.primary) {
     return { results: [], _metadata: generateResponseMetadata(db) };
   }

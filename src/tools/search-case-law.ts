@@ -157,6 +157,17 @@ export async function searchCaseLaw(
   }
 
   const variants = buildFtsQueryVariants(input.query);
+  if (variants.tooBroad) {
+    return {
+      results: [],
+      _metadata: {
+        ...generateResponseMetadata(db),
+        note:
+          `Query too broad: "${input.query}" contains only common Dutch words. ` +
+          'Please provide at least one specific legal term.',
+      },
+    };
+  }
   if (!variants.primary) {
     return { results: [], _metadata: generateResponseMetadata(db) };
   }
