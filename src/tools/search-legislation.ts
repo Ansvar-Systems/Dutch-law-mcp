@@ -4,6 +4,11 @@ import { normalizeAsOfDate } from '../utils/as-of-date.js';
 import { resolveDocumentId } from '../utils/document-id.js';
 import { generateResponseMetadata, type ToolResponse } from '../utils/metadata.js';
 import { withSqliteLockRetry } from '../utils/sqlite-retry.js';
+import {
+  buildProvisionCitation,
+  withCitationAttribution,
+  type CitationMetadata,
+} from '../utils/citation.js';
 
 export interface SearchLegislationInput {
   query: string;
@@ -20,11 +25,15 @@ export interface SearchLegislationResult {
   book: string | null;
   chapter: string | null;
   section: string | null;
+  article: string;
   title: string | null;
   snippet: string;
   relevance: number;
+  source_url: string | null;
+  effective_date: string | null;
   valid_from?: string | null;
   valid_to?: string | null;
+  _citation?: CitationMetadata;
 }
 
 const MAX_LIMIT = 50;
@@ -68,9 +77,12 @@ function runFtsSearch(
       p.book,
       p.chapter,
       p.section,
+      p.article,
       p.title,
       snippet(provisions_fts, 0, '**', '**', '...', 32) AS snippet,
-      bm25(provisions_fts) AS relevance
+      bm25(provisions_fts) AS relevance,
+      COALESCE(d.url, 'https://wetten.overheid.nl/' || p.document_id) AS source_url,
+      d.in_force_date AS effective_date
     FROM provisions_fts
     JOIN legal_provisions AS p ON provisions_fts.rowid = p.id
     JOIN legal_documents AS d ON p.document_id = d.id
@@ -123,9 +135,12 @@ function runVersionedFtsSearch(
       pv.book,
       pv.chapter,
       pv.section,
+      pv.article,
       pv.title,
       snippet(provision_versions_fts, 0, '**', '**', '...', 32) AS snippet,
       bm25(provision_versions_fts) AS relevance,
+      COALESCE(d.url, 'https://wetten.overheid.nl/' || pv.document_id) AS source_url,
+      COALESCE(pv.valid_from, d.in_force_date) AS effective_date,
       pv.valid_from,
       pv.valid_to
     FROM provision_versions_fts
@@ -158,6 +173,32 @@ function deduplicateResults(
     if (deduped.length >= limit) break;
   }
   return deduped;
+}
+
+function addResultCitations(rows: SearchLegislationResult[]): SearchLegislationResult[] {
+  return rows.map((row) => {
+    const citation = buildProvisionCitation(
+      row.document_id,
+      row.document_title || '',
+      row.provision_ref || row.article || '',
+      row.document_id,
+      row.provision_ref || row.article || '',
+      row.source_url,
+      null,
+    );
+
+    return {
+      ...row,
+      _citation: withCitationAttribution(citation, {
+        jurisdiction: 'NL',
+        source: row.document_title,
+        article: row.article || row.provision_ref,
+        publisher: 'Dutch Government (wetten.overheid.nl)',
+        license: 'Dutch government open data',
+        effective_date: row.effective_date || row.valid_from || null,
+      }),
+    };
+  });
 }
 
 export async function searchLegislation(
@@ -217,7 +258,7 @@ export async function searchLegislation(
     broadened = results.length > 0;
   }
 
-  const deduped = deduplicateResults(results, limit);
+  const deduped = addResultCitations(deduplicateResults(results, limit));
 
   return {
     results: deduped,

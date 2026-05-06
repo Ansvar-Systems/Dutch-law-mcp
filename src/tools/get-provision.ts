@@ -2,7 +2,7 @@ import type { Database } from '@ansvar/mcp-sqlite';
 import { normalizeAsOfDate } from '../utils/as-of-date.js';
 import { generateResponseMetadata, type ToolResponse } from '../utils/metadata.js';
 import { resolveDocumentId } from '../utils/document-id.js';
-import { buildProvisionCitation } from '../utils/citation.js';
+import { buildProvisionCitation, withCitationAttribution } from '../utils/citation.js';
 
 export interface GetProvisionInput {
   document_id: string;
@@ -24,6 +24,8 @@ export interface GetProvisionResult {
   article: string;
   title: string | null;
   content: string;
+  source_url: string | null;
+  effective_date: string | null;
   valid_from?: string | null;
   valid_to?: string | null;
 }
@@ -52,7 +54,9 @@ function getCurrentProvisions(
         p.section,
         p.article,
         p.title,
-        p.content
+        p.content,
+        COALESCE(d.url, 'https://wetten.overheid.nl/' || p.document_id) AS source_url,
+        d.in_force_date AS effective_date
       FROM legal_provisions AS p
       JOIN legal_documents AS d ON p.document_id = d.id
       WHERE p.document_id = ? AND p.provision_ref = ?
@@ -72,7 +76,9 @@ function getCurrentProvisions(
       p.section,
       p.article,
       p.title,
-      p.content
+      p.content,
+      COALESCE(d.url, 'https://wetten.overheid.nl/' || p.document_id) AS source_url,
+      d.in_force_date AS effective_date
     FROM legal_provisions AS p
     JOIN legal_documents AS d ON p.document_id = d.id
     WHERE p.document_id = ?
@@ -111,6 +117,8 @@ function getVersionedProvisions(
       pv.article,
       pv.title,
       pv.content,
+      COALESCE(d.url, 'https://wetten.overheid.nl/' || pv.document_id) AS source_url,
+      COALESCE(pv.valid_from, d.in_force_date) AS effective_date,
       pv.valid_from,
       pv.valid_to
     FROM legal_provision_versions AS pv
@@ -139,14 +147,24 @@ export async function getProvision(
     results,
     ...(provisionRef &&
       firstResult && {
-        _citation: buildProvisionCitation(
-          firstResult.document_id,
-          firstResult.document_title || '',
-          firstResult.provision_ref || '',
-          input.document_id,
-          input.section || input.provision_ref || input.article || '',
-          null,
-          null,
+        _citation: withCitationAttribution(
+          buildProvisionCitation(
+            firstResult.document_id,
+            firstResult.document_title || '',
+            firstResult.provision_ref || '',
+            input.document_id,
+            input.section || input.provision_ref || input.article || '',
+            firstResult.source_url,
+            null,
+          ),
+          {
+            jurisdiction: 'NL',
+            source: firstResult.document_title,
+            article: firstResult.article || firstResult.provision_ref,
+            publisher: 'Dutch Government (wetten.overheid.nl)',
+            license: 'Dutch government open data',
+            effective_date: firstResult.effective_date || firstResult.valid_from || null,
+          },
         ),
       }),
     _metadata: generateResponseMetadata(db),

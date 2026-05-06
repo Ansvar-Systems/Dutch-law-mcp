@@ -46,7 +46,7 @@
     "format:check": "prettier --check .",
     "prepare": "node -e \"try{require('husky')}catch(e){process.exit(0)}\" && husky || true",
     "prepublishOnly": "npm run build",
-    "postinstall": "test -d dist || npm run build || true"
+    "postinstall": "node -e \"const fs=require('fs');const cp=require('child_process');if(!fs.existsSync('dist')){try{cp.execFileSync(process.platform==='win32'?'npm.cmd':'npm',['run','build'],{stdio:'inherit'})}catch{}}\""
   },
   "dependencies": {
     "@ansvar/mcp-sqlite": "^1.0.0",
