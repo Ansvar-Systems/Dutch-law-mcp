@@ -434,6 +434,75 @@ function readSeedFiles(): SeedFile[] {
   return seeds;
 }
 
+function isBlank(value: string | undefined): boolean {
+  return value == null || value.trim() === '';
+}
+
+function validateCitationSeedFields(seeds: SeedFile[]): void {
+  const documentIds = new Set<string>();
+
+  for (const seed of seeds) {
+    for (const doc of seed.documents ?? []) {
+      if (isBlank(doc.id) || isBlank(doc.title)) {
+        throw new Error(
+          `Citation metadata requires non-empty document id and title: ${JSON.stringify(doc)}`,
+        );
+      }
+      documentIds.add(doc.id);
+    }
+  }
+
+  for (const seed of seeds) {
+    for (const provision of seed.provisions ?? []) {
+      if (
+        isBlank(provision.document_id) ||
+        isBlank(provision.provision_ref) ||
+        isBlank(provision.article)
+      ) {
+        throw new Error(
+          `Citation metadata requires non-empty provision document_id, provision_ref, and article: ${JSON.stringify(
+            provision,
+          )}`,
+        );
+      }
+      if (!documentIds.has(provision.document_id)) {
+        throw new Error(
+          `Citation metadata requires a source document for provision ${provision.document_id}:${provision.provision_ref}`,
+        );
+      }
+    }
+
+    for (const provision of seed.provision_versions ?? []) {
+      if (
+        isBlank(provision.document_id) ||
+        isBlank(provision.provision_ref) ||
+        isBlank(provision.article)
+      ) {
+        throw new Error(
+          `Citation metadata requires non-empty versioned provision document_id, provision_ref, and article: ${JSON.stringify(
+            provision,
+          )}`,
+        );
+      }
+      if (!documentIds.has(provision.document_id)) {
+        throw new Error(
+          `Citation metadata requires a source document for versioned provision ${provision.document_id}:${provision.provision_ref}`,
+        );
+      }
+    }
+
+    for (const caseLaw of seed.case_law ?? []) {
+      if (isBlank(caseLaw.document_id) || isBlank(caseLaw.ecli) || isBlank(caseLaw.court)) {
+        throw new Error(
+          `Citation metadata requires non-empty case law document_id, ecli, and court: ${JSON.stringify(
+            caseLaw,
+          )}`,
+        );
+      }
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -469,6 +538,7 @@ function main(): void {
   console.log();
   console.log('Reading seed files...');
   const seeds = readSeedFiles();
+  validateCitationSeedFields(seeds);
 
   if (seeds.length === 0) {
     console.log('No seed files found. Database created with empty schema.');

@@ -20,6 +20,21 @@ describe('searchParliamentaryProceedings', () => {
     expect(result._metadata.disclaimer).toContain('NOT LEGAL ADVICE');
   });
 
+  it('should attach non-empty citation metadata to each result', async () => {
+    const result = await searchParliamentaryProceedings(db, { query: 'privacy' });
+    expect(result.results.length).toBeGreaterThan(0);
+
+    for (const row of result.results) {
+      expect(row._citation?.canonical_ref).toBeTruthy();
+      expect(row._citation?.display_text).toBeTruthy();
+      expect(row._citation?.article).toBeTruthy();
+      expect(row._citation?.source).toBeTruthy();
+      expect(row._citation?.source_url).toMatch(/^https:\/\/www\.tweedekamer\.nl\//);
+      expect(row._citation?.publisher).toBe('Tweede Kamer / ParlaMint-NL');
+      expect(row._citation?.lookup.tool).toBe('search_parliamentary_proceedings');
+    }
+  });
+
   it('should find proceedings by FTS query', async () => {
     const result = await searchParliamentaryProceedings(db, { query: 'persoonsgegevens' });
     expect(result.results.length).toBeGreaterThan(0);
