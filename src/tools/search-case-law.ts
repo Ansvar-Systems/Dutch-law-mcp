@@ -70,7 +70,7 @@ function addResultCitations(rows: SearchCaseLawResult[]): SearchCaseLawResult[] 
         source: row.court || 'rechtspraak.nl',
         article: canonicalRef,
         publisher: 'De Rechtspraak (Dutch Judiciary)',
-        license: 'Open justice data',
+        license: 'Public-Domain',
         effective_date: row.decision_date,
       }),
     };

@@ -102,7 +102,7 @@ function addResultCitations(
         source: row.title,
         article: row.related_statute_id || canonicalRef,
         publisher: 'Tweede Kamer / ParlaMint-NL',
-        license: 'Dutch parliamentary open data',
+        license: 'Public-Domain',
         effective_date: row.issued_date,
       }),
     };

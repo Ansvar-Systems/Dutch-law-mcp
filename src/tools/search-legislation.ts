@@ -194,7 +194,7 @@ function addResultCitations(rows: SearchLegislationResult[]): SearchLegislationR
         source: row.document_title,
         article: row.article || row.provision_ref,
         publisher: 'Dutch Government (wetten.overheid.nl)',
-        license: 'Dutch government open data',
+        license: 'Public-Domain',
         effective_date: row.effective_date || row.valid_from || null,
       }),
     };

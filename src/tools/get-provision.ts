@@ -145,28 +145,27 @@ export async function getProvision(
   const firstResult = results.length > 0 ? results[0] : null;
   return {
     results,
-    ...(provisionRef &&
-      firstResult && {
-        _citation: withCitationAttribution(
-          buildProvisionCitation(
-            firstResult.document_id,
-            firstResult.document_title || '',
-            firstResult.provision_ref || '',
-            input.document_id,
-            input.section || input.provision_ref || input.article || '',
-            firstResult.source_url,
-            null,
-          ),
-          {
-            jurisdiction: 'NL',
-            source: firstResult.document_title,
-            article: firstResult.article || firstResult.provision_ref,
-            publisher: 'Dutch Government (wetten.overheid.nl)',
-            license: 'Dutch government open data',
-            effective_date: firstResult.effective_date || firstResult.valid_from || null,
-          },
+    ...(firstResult && {
+      _citation: withCitationAttribution(
+        buildProvisionCitation(
+          firstResult.document_id,
+          firstResult.document_title || '',
+          firstResult.provision_ref || '',
+          input.document_id,
+          input.section || input.provision_ref || input.article || provisionRef || '',
+          firstResult.source_url,
+          null,
         ),
-      }),
+        {
+          jurisdiction: 'NL',
+          source: firstResult.document_title,
+          article: firstResult.article || firstResult.provision_ref || null,
+          publisher: 'Dutch Government (wetten.overheid.nl)',
+          license: 'Public-Domain',
+          effective_date: firstResult.effective_date || firstResult.valid_from || null,
+        },
+      ),
+    }),
     _metadata: generateResponseMetadata(db),
   };
 }

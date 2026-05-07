@@ -31,6 +31,7 @@ describe('searchParliamentaryProceedings', () => {
       expect(row._citation?.source).toBeTruthy();
       expect(row._citation?.source_url).toMatch(/^https:\/\/www\.tweedekamer\.nl\//);
       expect(row._citation?.publisher).toBe('Tweede Kamer / ParlaMint-NL');
+      expect(row._citation?.license).toBe('Public-Domain');
       expect(row._citation?.lookup.tool).toBe('search_parliamentary_proceedings');
     }
   });
