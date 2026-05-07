@@ -2,6 +2,11 @@ import type { Database } from '@ansvar/mcp-sqlite';
 import { buildFtsQueryVariants } from '../utils/fts-query.js';
 import { generateResponseMetadata, type ToolResponse } from '../utils/metadata.js';
 import { hasTable } from '../capabilities.js';
+import {
+  buildCitation,
+  withCitationAttribution,
+  type CitationMetadata,
+} from '../utils/citation.js';
 
 export interface SearchCaseLawInput {
   query: string;
@@ -27,6 +32,7 @@ export interface SearchCaseLawResult {
   snippet: string | null;
   relevance: number | null;
   url: string | null;
+  _citation?: CitationMetadata;
 }
 
 const MAX_LIMIT = 50;
@@ -40,6 +46,35 @@ function clampLimit(limit: number | undefined): number {
 function ecliToUrl(ecli: string | null): string | null {
   if (ecli) return `https://uitspraken.rechtspraak.nl/details?id=${encodeURIComponent(ecli)}`;
   return null;
+}
+
+function addResultCitations(rows: SearchCaseLawResult[]): SearchCaseLawResult[] {
+  return rows.map((row) => {
+    const canonicalRef = row.ecli || row.document_id;
+    const displayText = [row.court, row.decision_date, canonicalRef].filter(Boolean).join(' ');
+    const citation = buildCitation(
+      canonicalRef,
+      displayText,
+      'search_case_law',
+      { ecli: canonicalRef },
+      row.url || ecliToUrl(row.ecli),
+      [row.document_id, row.case_number, row.document_title].filter((value): value is string =>
+        Boolean(value),
+      ),
+    );
+
+    return {
+      ...row,
+      _citation: withCitationAttribution(citation, {
+        jurisdiction: 'NL',
+        source: row.court || 'rechtspraak.nl',
+        article: canonicalRef,
+        publisher: 'De Rechtspraak (Dutch Judiciary)',
+        license: 'Open justice data',
+        effective_date: row.decision_date,
+      }),
+    };
+  });
 }
 
 function lookupByEcli(db: Database, ecli: string): SearchCaseLawResult[] {
@@ -60,7 +95,7 @@ function lookupByEcli(db: Database, ecli: string): SearchCaseLawResult[] {
     WHERE cl.ecli = ?
   `;
   const rows = db.prepare(sql).all(ecli) as SearchCaseLawResult[];
-  return rows.map((r) => ({ ...r, url: ecliToUrl(r.ecli) }));
+  return addResultCitations(rows.map((r) => ({ ...r, url: ecliToUrl(r.ecli) })));
 }
 
 function runFtsSearch(
@@ -128,7 +163,7 @@ function runFtsSearch(
   params.push(limit);
 
   const rows = db.prepare(sql).all(...params) as SearchCaseLawResult[];
-  return rows.map((r) => ({ ...r, url: ecliToUrl(r.ecli) }));
+  return addResultCitations(rows.map((r) => ({ ...r, url: ecliToUrl(r.ecli) })));
 }
 
 export async function searchCaseLaw(
