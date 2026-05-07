@@ -109,4 +109,13 @@ describe('searchParliamentaryProceedings', () => {
     expect(withStatute).toBeDefined();
     expect(withStatute!.related_statute_id).toBe('BWBR0042124');
   });
+
+  it('falls back to publisher URL when row.url is null', async () => {
+    const result = await searchParliamentaryProceedings(db, { query: 'nullurltoken' });
+    expect(result.results.length).toBeGreaterThan(0);
+    const row = result.results.find((r) => r.title.includes('NullUrlSpeaker'));
+    expect(row).toBeDefined();
+    expect(row!.url).toBeNull();
+    expect(row!._citation?.source_url).toBe('https://www.tweedekamer.nl/');
+  });
 });
