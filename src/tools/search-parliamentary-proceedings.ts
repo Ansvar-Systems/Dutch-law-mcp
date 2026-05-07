@@ -86,12 +86,16 @@ function addResultCitations(
 ): SearchParliamentaryProceedingsResult[] {
   return rows.map((row) => {
     const canonicalRef = `NL parliamentary proceeding ${row.id}`;
+    // Publisher-level fallback for items missing an upstream URL. Item-level
+    // null is common for older ParlaMint entries where the verbatim transcript
+    // was archived before the kamerstukken portal added per-speaker permalinks.
+    const sourceUrl = row.url ?? 'https://www.tweedekamer.nl/';
     const citation = buildCitation(
       canonicalRef,
       row.title || canonicalRef,
       'search_parliamentary_proceedings',
       { query: row.title || canonicalRef },
-      row.url,
+      sourceUrl,
       [row.related_statute_id].filter((value): value is string => Boolean(value)),
     );
 

@@ -662,6 +662,17 @@ const SAMPLE_AGENCY_GUIDANCE = [
     url: 'https://www.tweedekamer.nl/kamerstukken/plenaire_verslagen',
     related_statute_id: null,
   },
+  {
+    agency: 'tweede-kamer',
+    document_id: null,
+    title: '2024-04-01 — NullUrlSpeaker',
+    summary: 'synthetisch nullurltoken fixture for source-url fallback test',
+    full_text:
+      'Synthetic fixture row to verify the publisher-level source_url fallback when the upstream url field is null.',
+    issued_date: '2024-04-01',
+    url: null,
+    related_statute_id: null,
+  },
 ];
 
 const SAMPLE_DEFINITIONS = [
