@@ -2,7 +2,6 @@
 
 **The Wetten.overheid.nl alternative for the AI age.**
 
-[![npm version](https://badge.fury.io/js/@ansvar%2Fdutch-law-mcp.svg)](https://www.npmjs.com/package/@ansvar/dutch-law-mcp)
 [![MCP Registry](https://img.shields.io/badge/MCP-Registry-blue)](https://registry.modelcontextprotocol.io)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![GitHub stars](https://img.shields.io/github/stars/Ansvar-Systems/Dutch-law-mcp?style=social)](https://github.com/Ansvar-Systems/Dutch-law-mcp)
@@ -36,30 +35,31 @@ This MCP server makes Dutch law **searchable, cross-referenceable, and AI-readab
 
 ## Quick Start
 
-### Use Remotely (No Install Needed)
+Dutch Law is reachable through the **Ansvar MCP Gateway** at `https://gateway.ansvar.eu`. The gateway terminates OAuth, fans queries out across the Dutch corpus, and returns citation-grounded answers. There is no public unauthenticated endpoint.
 
-> Connect directly to the hosted version -- zero dependencies, nothing to install.
+> The previous public proxy at `mcp.ansvar.eu/law-nl/mcp` was decommissioned 2026-05-01. The npm package `@ansvar/dutch-law-mcp` is deprecated. Both are listed for archival reference only.
 
-**Endpoint:** `https://mcp.ansvar.eu/law-nl/mcp`
+### Connect via Ansvar Gateway
 
-| Client             | How to Connect                                                               |
-| ------------------ | ---------------------------------------------------------------------------- |
-| **Claude.ai**      | Settings > Connectors > Add Integration > paste URL                          |
-| **Claude Code**    | `claude mcp add dutch-law --transport http https://mcp.ansvar.eu/law-nl/mcp` |
-| **Claude Desktop** | Add to config (see below)                                                    |
-| **GitHub Copilot** | Add to VS Code settings (see below)                                          |
+Sign up at [`gateway.ansvar.eu`](https://gateway.ansvar.eu) for a Premium / Team / Company tier account, then point your client at the gateway:
 
 **Claude Desktop** -- add to `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
-    "dutch-law": {
+    "ansvar-gateway": {
       "type": "url",
-      "url": "https://mcp.ansvar.eu/law-nl/mcp"
+      "url": "https://gateway.ansvar.eu/mcp"
     }
   }
 }
+```
+
+**Claude Code:**
+
+```bash
+claude mcp add ansvar-gateway --transport http https://gateway.ansvar.eu/mcp
 ```
 
 **GitHub Copilot** -- add to VS Code `settings.json`:
@@ -67,48 +67,25 @@ This MCP server makes Dutch law **searchable, cross-referenceable, and AI-readab
 ```json
 {
   "github.copilot.chat.mcp.servers": {
-    "dutch-law": {
+    "ansvar-gateway": {
       "type": "http",
-      "url": "https://mcp.ansvar.eu/law-nl/mcp"
+      "url": "https://gateway.ansvar.eu/mcp"
     }
   }
 }
 ```
 
-### Use Locally (npm)
+The gateway authenticates via Keycloak OAuth 2.1 with Dynamic Client Registration. On first connect your client will open a browser tab for sign-in and consent.
+
+### Run Locally (Docker)
+
+For development or air-gapped deployments, the GHCR image ships with the prebuilt SQLite database baked in:
 
 ```bash
-npx @ansvar/dutch-law-mcp
+docker run --rm -p 3009:3009 ghcr.io/ansvar-systems/dutch-law-mcp:latest
 ```
 
-**Claude Desktop** -- add to `claude_desktop_config.json`:
-
-**macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "dutch-law": {
-      "command": "npx",
-      "args": ["-y", "@ansvar/dutch-law-mcp"]
-    }
-  }
-}
-```
-
-**Cursor / VS Code:**
-
-```json
-{
-  "mcp.servers": {
-    "dutch-law": {
-      "command": "npx",
-      "args": ["-y", "@ansvar/dutch-law-mcp"]
-    }
-  }
-}
-```
+The image self-tests via the bundled `HEALTHCHECK` and exits non-zero if the database is missing. Watchtower-driven fleets get automatic rolling updates on every push to `main`.
 
 ---
 
@@ -409,35 +386,13 @@ npm run populate:xrefs           # Populate EU cross-references
 
 ---
 
-## Related Projects: Complete Compliance Suite
+## Related Projects
 
-This server is part of **Ansvar's Compliance Suite** -- MCP servers that work together for end-to-end compliance coverage:
+Ansvar runs a fleet of jurisdiction- and domain-specific MCP servers — Dutch law is one of ~100 national / EU / sector / domain MCPs reachable through the same gateway. Coverage spans EU regulations, US federal compliance, ICS / OT security, automotive cybersecurity, sanctions screening, and 70+ national law corpora across Europe, North America, Asia-Pacific, and Latin America.
 
-### [@ansvar/eu-regulations-mcp](https://github.com/Ansvar-Systems/EU_compliance_MCP)
+The unified entry point is `https://gateway.ansvar.eu`. The gateway routes a query to the correct downstream MCP based on jurisdiction, sector, and tool — single connect, full coverage.
 
-**Query 49 EU regulations directly from Claude** -- GDPR, AI Act, DORA, NIS2, MiFID II, eIDAS, and more. Full regulatory text with article-level search. `npx @ansvar/eu-regulations-mcp`
-
-### @ansvar/dutch-law-mcp (This Project)
-
-**Query 3,251 Dutch statutes directly from Claude** -- AVG, BW, WvSr, Mededingingswet, Wft, and the full BWB corpus. Full provision text with EU cross-references. `npx @ansvar/dutch-law-mcp`
-
-### [@ansvar/us-regulations-mcp](https://github.com/Ansvar-Systems/US_Compliance_MCP)
-
-**Query US federal and state compliance laws** -- HIPAA, CCPA, SOX, GLBA, FERPA, and more. `npm install @ansvar/us-regulations-mcp`
-
-### [@ansvar/ot-security-mcp](https://github.com/Ansvar-Systems/ot-security-mcp)
-
-**Query IEC 62443, NIST 800-82/53, and MITRE ATT&CK for ICS** -- Specialized for OT/ICS environments. `npx @ansvar/ot-security-mcp`
-
-### [@ansvar/automotive-cybersecurity-mcp](https://github.com/Ansvar-Systems/Automotive-MCP)
-
-**Query UNECE R155/R156 and ISO 21434** -- Automotive cybersecurity compliance. `npx @ansvar/automotive-cybersecurity-mcp`
-
-### [@ansvar/sanctions-mcp](https://github.com/Ansvar-Systems/Sanctions-MCP)
-
-**Offline-capable sanctions screening** -- OFAC, EU, UN sanctions lists. `pip install ansvar-sanctions-mcp`
-
-**70+ national law MCPs** covering Australia, Belgium, Brazil, Canada, Denmark, Finland, France, Germany, Ireland, Italy, Japan, Norway, Poland, Singapore, South Korea, Sweden, Switzerland, UK, and more.
+For an up-to-date inventory see the [Ansvar fleet overview](https://ansvar.eu/coverage). The corresponding GitHub orgs are [`Ansvar-Systems`](https://github.com/Ansvar-Systems) (active fleet) and the deprecated npm packages under [`@ansvar`](https://www.npmjs.com/org/ansvar) (kept only as archival pointers; they no longer install).
 
 ---
 
