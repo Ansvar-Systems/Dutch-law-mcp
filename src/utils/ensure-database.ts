@@ -73,13 +73,23 @@ function getCachePath(): string {
 // Size validation
 // ---------------------------------------------------------------------------
 
-const MIN_SIZE = 900 * 1024 * 1024; // 900 MB
-const MAX_SIZE = 1.2 * 1024 * 1024 * 1024; // 1.2 GB
+// Sanity bounds — DB ranges from ~80 MB (free tier) to ~5 GB (premium upper
+// bound). Tightening the lower bound risks false rejection when the corpus
+// shrinks (e.g., source legitimacy takedown). Tightening the upper bound
+// risks false rejection on premium tier growth. The point of this check is
+// only to detect a corrupt/error-page download, not to assert exact size.
+const MIN_SIZE = 50 * 1024 * 1024; // 50 MB — below this is almost certainly an error page or partial download
+const MAX_SIZE = 5 * 1024 * 1024 * 1024; // 5 GB — above this is a redirect loop or wrong asset
+
+export function isAcceptableDbSize(bytes: number): boolean {
+  return bytes >= MIN_SIZE && bytes <= MAX_SIZE;
+}
 
 function validateSize(filePath: string): boolean {
   try {
     const stat = fs.statSync(filePath);
-    return stat.size >= MIN_SIZE && stat.size <= MAX_SIZE;
+    process.stderr.write(`[dutch-law-mcp] Downloaded database size: ${formatBytes(stat.size)}\n`);
+    return isAcceptableDbSize(stat.size);
   } catch {
     return false;
   }
