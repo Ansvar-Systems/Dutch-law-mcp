@@ -31,6 +31,7 @@ describe('searchParliamentaryProceedings', () => {
       expect(row._citation?.source).toBeTruthy();
       expect(row._citation?.source_url).toMatch(/^https:\/\/www\.tweedekamer\.nl\//);
       expect(row._citation?.publisher).toBe('Tweede Kamer / ParlaMint-NL');
+      expect(row._citation?.license).toBe('Public-Domain');
       expect(row._citation?.lookup.tool).toBe('search_parliamentary_proceedings');
     }
   });
@@ -107,5 +108,14 @@ describe('searchParliamentaryProceedings', () => {
     const withStatute = result.results.find((r) => r.related_statute_id != null);
     expect(withStatute).toBeDefined();
     expect(withStatute!.related_statute_id).toBe('BWBR0042124');
+  });
+
+  it('falls back to publisher URL when row.url is null', async () => {
+    const result = await searchParliamentaryProceedings(db, { query: 'nullurltoken' });
+    expect(result.results.length).toBeGreaterThan(0);
+    const row = result.results.find((r) => r.title.includes('NullUrlSpeaker'));
+    expect(row).toBeDefined();
+    expect(row!.url).toBeNull();
+    expect(row!._citation?.source_url).toBe('https://www.tweedekamer.nl/');
   });
 });

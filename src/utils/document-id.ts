@@ -8,7 +8,7 @@
 
 import type { Database } from '@ansvar/mcp-sqlite';
 
-/** Well-known abbreviations for Dutch statutes (short name -> BWB-ID). */
+/** Well-known abbreviations and short-form names for Dutch statutes. */
 const ABBREVIATIONS: Record<string, string> = {
   BW: 'BWBR0005289',
   SR: 'BWBR0001854',
@@ -26,6 +26,10 @@ const ABBREVIATIONS: Record<string, string> = {
   AVG: 'BWBR0040940',
   GDPR: 'BWBR0040940',
   WBP: 'BWBR0011823',
+  // Step-4 LIKE-shortest matching otherwise picks the wrong BWB-ID for these
+  // because production has multiple statutes whose title contains the short
+  // name (amendments, implementation acts). Pin them to the canonical entry.
+  AUTEURSWET: 'BWBR0001886',
 };
 
 /**

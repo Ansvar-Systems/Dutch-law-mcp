@@ -31,6 +31,7 @@ describe('searchLegislation', () => {
       expect(row._citation?.source).toBeTruthy();
       expect(row._citation?.source_url).toMatch(/^https:\/\/wetten\.overheid\.nl\//);
       expect(row._citation?.publisher).toBe('Dutch Government (wetten.overheid.nl)');
+      expect(row._citation?.license).toBe('Public-Domain');
       expect(row._citation?.lookup.tool).toBe('get_provision');
     }
   });

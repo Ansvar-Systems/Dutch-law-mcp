@@ -18,7 +18,7 @@ export type Capability =
   | 'eu_references'
   | 'expanded_case_law'
   | 'full_preparatory_works'
-  | 'agency_guidance';
+  | 'parliamentary_proceedings';
 
 export type Tier = 'free' | 'professional' | 'unknown';
 
@@ -39,13 +39,13 @@ const CAPABILITY_TABLES: Record<Capability, string> = {
   eu_references: 'eu_references',
   expanded_case_law: 'case_law_full',
   full_preparatory_works: 'preparatory_works_full',
-  agency_guidance: 'agency_guidance',
+  parliamentary_proceedings: 'parliamentary_proceedings',
 };
 
 const PROFESSIONAL_CAPABILITIES: Capability[] = [
   'expanded_case_law',
   'full_preparatory_works',
-  'agency_guidance',
+  'parliamentary_proceedings',
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -60,8 +60,9 @@ export function detectCapabilities(db: InstanceType<typeof Database>): Set<Capab
   const capabilities = new Set<Capability>();
 
   const tables = new Set(
-    (db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[])
-      .map(r => r.name)
+    (
+      db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[]
+    ).map((r) => r.name),
   );
 
   for (const [capability, table] of Object.entries(CAPABILITY_TABLES)) {
@@ -85,13 +86,16 @@ export function readDbMetadata(db: InstanceType<typeof Database>): DbMetadata {
   };
 
   try {
-    const hasTable = db.prepare(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='db_metadata'"
-    ).get();
+    const hasTable = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='db_metadata'")
+      .get();
 
     if (!hasTable) return defaults;
 
-    const rows = db.prepare('SELECT key, value FROM db_metadata').all() as { key: string; value: string }[];
+    const rows = db.prepare('SELECT key, value FROM db_metadata').all() as {
+      key: string;
+      value: string;
+    }[];
     const meta = { ...defaults };
 
     for (const row of rows) {
@@ -135,8 +139,8 @@ export function upgradeMessage(feature: string): string {
  * Useful for guarding tool execution against missing tables on the free tier.
  */
 export function hasTable(db: InstanceType<typeof Database>, tableName: string): boolean {
-  const row = db.prepare(
-    "SELECT name FROM sqlite_master WHERE type='table' AND name=?"
-  ).get(tableName);
+  const row = db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?")
+    .get(tableName);
   return row != null;
 }

@@ -45,7 +45,7 @@ function runFtsSearch(
   const conditions: string[] = [];
   const params: (string | number)[] = [];
 
-  conditions.push('agency_guidance_fts MATCH ?');
+  conditions.push('parliamentary_proceedings_fts MATCH ?');
   params.push(ftsQuery);
 
   if (dateFrom) {
@@ -66,14 +66,14 @@ function runFtsSearch(
       ag.title,
       ag.summary,
       ag.issued_date,
-      snippet(agency_guidance_fts, 2, '**', '**', '...', 32) AS snippet,
-      bm25(agency_guidance_fts) AS relevance,
+      snippet(parliamentary_proceedings_fts, 2, '**', '**', '...', 32) AS snippet,
+      bm25(parliamentary_proceedings_fts) AS relevance,
       ag.url,
       ag.related_statute_id
-    FROM agency_guidance_fts
-    JOIN agency_guidance AS ag ON agency_guidance_fts.rowid = ag.id
+    FROM parliamentary_proceedings_fts
+    JOIN parliamentary_proceedings AS ag ON parliamentary_proceedings_fts.rowid = ag.id
     ${whereClause}
-    ORDER BY bm25(agency_guidance_fts)
+    ORDER BY bm25(parliamentary_proceedings_fts)
     LIMIT ?
   `;
   params.push(limit);
@@ -86,12 +86,16 @@ function addResultCitations(
 ): SearchParliamentaryProceedingsResult[] {
   return rows.map((row) => {
     const canonicalRef = `NL parliamentary proceeding ${row.id}`;
+    // Publisher-level fallback for items missing an upstream URL. Item-level
+    // null is common for older ParlaMint entries where the verbatim transcript
+    // was archived before the kamerstukken portal added per-speaker permalinks.
+    const sourceUrl = row.url ?? 'https://www.tweedekamer.nl/';
     const citation = buildCitation(
       canonicalRef,
       row.title || canonicalRef,
       'search_parliamentary_proceedings',
       { query: row.title || canonicalRef },
-      row.url,
+      sourceUrl,
       [row.related_statute_id].filter((value): value is string => Boolean(value)),
     );
 
@@ -102,7 +106,7 @@ function addResultCitations(
         source: row.title,
         article: row.related_statute_id || canonicalRef,
         publisher: 'Tweede Kamer / ParlaMint-NL',
-        license: 'Dutch parliamentary open data',
+        license: 'Public-Domain',
         effective_date: row.issued_date,
       }),
     };
@@ -113,8 +117,8 @@ export async function searchParliamentaryProceedings(
   db: Database,
   input: SearchParliamentaryProceedingsInput,
 ): Promise<ToolResponse<SearchParliamentaryProceedingsResult[]>> {
-  // Guard: check that agency_guidance table exists (missing on free tier)
-  if (!hasTable(db, 'agency_guidance')) {
+  // Guard: check that parliamentary_proceedings table exists (missing on free tier)
+  if (!hasTable(db, 'parliamentary_proceedings')) {
     return {
       results: [],
       _metadata: generateResponseMetadata(db),

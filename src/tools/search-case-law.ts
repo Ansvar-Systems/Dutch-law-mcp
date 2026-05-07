@@ -52,11 +52,14 @@ function addResultCitations(rows: SearchCaseLawResult[]): SearchCaseLawResult[] 
   return rows.map((row) => {
     const canonicalRef = row.ecli || row.document_id;
     const displayText = [row.court, row.decision_date, canonicalRef].filter(Boolean).join(' ');
+    const lookupArgs: Record<string, string> = row.ecli
+      ? { ecli: row.ecli }
+      : { document_id: row.document_id };
     const citation = buildCitation(
       canonicalRef,
       displayText,
       'search_case_law',
-      { ecli: canonicalRef },
+      lookupArgs,
       row.url || ecliToUrl(row.ecli),
       [row.document_id, row.case_number, row.document_title].filter((value): value is string =>
         Boolean(value),
@@ -70,7 +73,7 @@ function addResultCitations(rows: SearchCaseLawResult[]): SearchCaseLawResult[] 
         source: row.court || 'rechtspraak.nl',
         article: canonicalRef,
         publisher: 'De Rechtspraak (Dutch Judiciary)',
-        license: 'Open justice data',
+        license: 'Public-Domain',
         effective_date: row.decision_date,
       }),
     };

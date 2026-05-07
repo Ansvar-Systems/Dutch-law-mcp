@@ -168,7 +168,7 @@ CREATE TRIGGER prep_works_ad AFTER DELETE ON preparatory_works BEGIN
   VALUES ('delete', old.id, old.title, old.summary);
 END;
 
-CREATE TABLE agency_guidance (
+CREATE TABLE parliamentary_proceedings (
   id INTEGER PRIMARY KEY,
   agency TEXT NOT NULL,
   document_id TEXT,
@@ -180,20 +180,20 @@ CREATE TABLE agency_guidance (
   related_statute_id TEXT
 );
 
-CREATE VIRTUAL TABLE agency_guidance_fts USING fts5(
+CREATE VIRTUAL TABLE parliamentary_proceedings_fts USING fts5(
   title, summary, full_text,
-  content='agency_guidance',
+  content='parliamentary_proceedings',
   content_rowid='id',
   tokenize='unicode61'
 );
 
-CREATE TRIGGER agency_guidance_ai AFTER INSERT ON agency_guidance BEGIN
-  INSERT INTO agency_guidance_fts(rowid, title, summary, full_text)
+CREATE TRIGGER parliamentary_proceedings_ai AFTER INSERT ON parliamentary_proceedings BEGIN
+  INSERT INTO parliamentary_proceedings_fts(rowid, title, summary, full_text)
   VALUES (new.id, new.title, new.summary, new.full_text);
 END;
 
-CREATE TRIGGER agency_guidance_ad AFTER DELETE ON agency_guidance BEGIN
-  INSERT INTO agency_guidance_fts(agency_guidance_fts, rowid, title, summary, full_text)
+CREATE TRIGGER parliamentary_proceedings_ad AFTER DELETE ON parliamentary_proceedings BEGIN
+  INSERT INTO parliamentary_proceedings_fts(parliamentary_proceedings_fts, rowid, title, summary, full_text)
   VALUES ('delete', old.id, old.title, old.summary, old.full_text);
 END;
 
@@ -349,6 +349,31 @@ const SAMPLE_DOCUMENTS = [
     description: 'Uitvoering van de Algemene verordening gegevensbescherming',
   },
   {
+    id: 'BWBR0001886',
+    type: 'statute',
+    title: 'Auteurswet (geconsolideerde versie 1912)',
+    title_en: 'Copyright Act (consolidated)',
+    short_name: 'Aw',
+    status: 'in_force',
+    issued_date: '1912-09-23',
+    in_force_date: '1912-11-01',
+    url: 'https://wetten.overheid.nl/BWBR0001886',
+    description: 'Auteurswet — bescherming van werken van letterkunde, wetenschap of kunst',
+  },
+  {
+    id: 'BWBR0099999',
+    type: 'statute',
+    title: 'Auteurswet 2024',
+    title_en: null,
+    short_name: null,
+    status: 'in_force',
+    issued_date: '2021-04-23',
+    in_force_date: '2021-06-07',
+    url: 'https://wetten.overheid.nl/BWBR0099999',
+    description:
+      'Synthetic distractor with shorter title — without the AUTEURSWET alias, LIKE-shortest would pick this',
+  },
+  {
     id: 'BWBR0011823',
     type: 'statute',
     title: 'Wet bescherming persoonsgegevens',
@@ -383,6 +408,18 @@ const SAMPLE_DOCUMENTS = [
     in_force_date: null,
     url: 'https://uitspraken.rechtspraak.nl/details?id=ECLI:NL:HR:2019:376',
     description: 'Onrechtmatige daad; schadevergoeding',
+  },
+  {
+    id: 'INT-CASE-NULL-ECLI-001',
+    type: 'case_law',
+    title: 'Internal case identifier (no ECLI assigned)',
+    title_en: null,
+    short_name: null,
+    status: 'in_force',
+    issued_date: '2024-01-15',
+    in_force_date: null,
+    url: null,
+    description: 'Synthetic fixture for null-ecli lookup keying test',
   },
   {
     id: 'ECLI:NL:RVS:2020:1234',
@@ -591,6 +628,17 @@ const SAMPLE_CASE_LAW = [
       'De Afdeling bestuursrechtspraak van de Raad van State bevestigde het besluit van het bestuursorgaan inzake handhaving op grond van de Algemene wet bestuursrecht.',
     keywords: 'bestuursrecht handhaving Awb besluit bestuursorgaan',
   },
+  {
+    document_id: 'INT-CASE-NULL-ECLI-001',
+    court: 'CBb',
+    ecli: null,
+    case_number: 'INT-2024-001',
+    decision_date: '2024-01-15',
+    procedure_type: 'Bezwaar',
+    legal_domain: 'Bestuursrecht',
+    summary: 'synthetisch fixture nullecli token',
+    keywords: 'nullecli synthetisch fixture',
+  },
 ];
 
 const SAMPLE_PREPARATORY_WORKS = [
@@ -637,6 +685,17 @@ const SAMPLE_AGENCY_GUIDANCE = [
       'De gang van zaken bij de Belastingdienst rondom de kinderopvangtoeslag is onacceptabel. Duizenden gezinnen zijn ten onrechte als fraudeur bestempeld op basis van geautomatiseerde risicoprofilering zonder adequate menselijke toetsing.',
     issued_date: '2019-11-20',
     url: 'https://www.tweedekamer.nl/kamerstukken/plenaire_verslagen',
+    related_statute_id: null,
+  },
+  {
+    agency: 'tweede-kamer',
+    document_id: null,
+    title: '2024-04-01 — NullUrlSpeaker',
+    summary: 'synthetisch nullurltoken fixture for source-url fallback test',
+    full_text:
+      'Synthetic fixture row to verify the publisher-level source_url fallback when the upstream url field is null.',
+    issued_date: '2024-04-01',
+    url: null,
     related_statute_id: null,
   },
 ];
@@ -840,7 +899,7 @@ export function createTestDatabase(): InstanceType<typeof Database> {
 
     // Agency guidance (parliamentary proceedings)
     const insertGuidance = db.prepare(
-      `INSERT INTO agency_guidance (agency, document_id, title, summary, full_text, issued_date, url, related_statute_id)
+      `INSERT INTO parliamentary_proceedings (agency, document_id, title, summary, full_text, issued_date, url, related_statute_id)
        VALUES (@agency, @document_id, @title, @summary, @full_text, @issued_date, @url, @related_statute_id)`,
     );
     for (const ag of SAMPLE_AGENCY_GUIDANCE) {

@@ -13,6 +13,15 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  validateCitationSeedFields,
+  type CaseLawSeed,
+  type DocumentSeed,
+  type PreparatoryWorkSeed,
+  type ProvisionSeed,
+  type ProvisionVersionSeed,
+} from './seed-validator.js';
+
 // ---------------------------------------------------------------------------
 // Paths
 // ---------------------------------------------------------------------------
@@ -281,66 +290,6 @@ CREATE TABLE IF NOT EXISTS db_metadata (
 // Seed file types
 // ---------------------------------------------------------------------------
 
-interface DocumentSeed {
-  id: string;
-  type: 'statute' | 'amvb' | 'ministerial_regulation' | 'kamerstuk' | 'case_law';
-  title: string;
-  title_en?: string;
-  short_name?: string;
-  status?: string;
-  issued_date?: string;
-  in_force_date?: string;
-  url?: string;
-  description?: string;
-}
-
-interface ProvisionSeed {
-  document_id: string;
-  provision_ref: string;
-  book?: string;
-  chapter?: string;
-  section?: string;
-  article: string;
-  title?: string;
-  content: string;
-  metadata?: string;
-}
-
-interface ProvisionVersionSeed {
-  document_id: string;
-  provision_ref: string;
-  book?: string;
-  chapter?: string;
-  section?: string;
-  article: string;
-  title?: string;
-  content: string;
-  metadata?: string;
-  valid_from?: string;
-  valid_to?: string;
-}
-
-interface CaseLawSeed {
-  document_id: string;
-  court: string;
-  ecli?: string;
-  case_number?: string;
-  decision_date?: string;
-  procedure_type?: string;
-  legal_domain?: string;
-  summary?: string;
-  keywords?: string;
-}
-
-interface PreparatoryWorkSeed {
-  statute_id: string;
-  prep_document_id: string;
-  kamerstuk_ref?: string;
-  document_type?: string;
-  title?: string;
-  summary?: string;
-}
-
 interface DefinitionSeed {
   document_id: string;
   term: string;
@@ -432,75 +381,6 @@ function readSeedFiles(): SeedFile[] {
   }
 
   return seeds;
-}
-
-function isBlank(value: string | undefined): boolean {
-  return value == null || value.trim() === '';
-}
-
-function validateCitationSeedFields(seeds: SeedFile[]): void {
-  const documentIds = new Set<string>();
-
-  for (const seed of seeds) {
-    for (const doc of seed.documents ?? []) {
-      if (isBlank(doc.id) || isBlank(doc.title)) {
-        throw new Error(
-          `Citation metadata requires non-empty document id and title: ${JSON.stringify(doc)}`,
-        );
-      }
-      documentIds.add(doc.id);
-    }
-  }
-
-  for (const seed of seeds) {
-    for (const provision of seed.provisions ?? []) {
-      if (
-        isBlank(provision.document_id) ||
-        isBlank(provision.provision_ref) ||
-        isBlank(provision.article)
-      ) {
-        throw new Error(
-          `Citation metadata requires non-empty provision document_id, provision_ref, and article: ${JSON.stringify(
-            provision,
-          )}`,
-        );
-      }
-      if (!documentIds.has(provision.document_id)) {
-        throw new Error(
-          `Citation metadata requires a source document for provision ${provision.document_id}:${provision.provision_ref}`,
-        );
-      }
-    }
-
-    for (const provision of seed.provision_versions ?? []) {
-      if (
-        isBlank(provision.document_id) ||
-        isBlank(provision.provision_ref) ||
-        isBlank(provision.article)
-      ) {
-        throw new Error(
-          `Citation metadata requires non-empty versioned provision document_id, provision_ref, and article: ${JSON.stringify(
-            provision,
-          )}`,
-        );
-      }
-      if (!documentIds.has(provision.document_id)) {
-        throw new Error(
-          `Citation metadata requires a source document for versioned provision ${provision.document_id}:${provision.provision_ref}`,
-        );
-      }
-    }
-
-    for (const caseLaw of seed.case_law ?? []) {
-      if (isBlank(caseLaw.document_id) || isBlank(caseLaw.ecli) || isBlank(caseLaw.court)) {
-        throw new Error(
-          `Citation metadata requires non-empty case law document_id, ecli, and court: ${JSON.stringify(
-            caseLaw,
-          )}`,
-        );
-      }
-    }
-  }
 }
 
 // ---------------------------------------------------------------------------

@@ -31,6 +31,7 @@ describe('searchCaseLaw', () => {
       expect(row._citation?.source).toBeTruthy();
       expect(row._citation?.source_url).toMatch(/^https:\/\/uitspraken\.rechtspraak\.nl\//);
       expect(row._citation?.publisher).toBe('De Rechtspraak (Dutch Judiciary)');
+      expect(row._citation?.license).toBe('Public-Domain');
       expect(row._citation?.lookup.tool).toBe('search_case_law');
     }
   });
@@ -137,5 +138,15 @@ describe('searchCaseLaw', () => {
     const rvs = result.results.find((r) => r.court === 'RVS');
     expect(rvs).toBeDefined();
     expect(rvs!.ecli).toBe('ECLI:NL:RVS:2020:1234');
+  });
+
+  it('keys lookup.args by document_id when ecli is null', async () => {
+    const result = await searchCaseLaw(db, { query: 'nullecli' });
+    expect(result.results.length).toBeGreaterThan(0);
+    const row = result.results.find((r) => r.document_id === 'INT-CASE-NULL-ECLI-001');
+    expect(row).toBeDefined();
+    expect(row!.ecli).toBeNull();
+    expect(row!._citation?.lookup.args).toEqual({ document_id: 'INT-CASE-NULL-ECLI-001' });
+    expect(row!._citation?.lookup.args).not.toHaveProperty('ecli');
   });
 });
