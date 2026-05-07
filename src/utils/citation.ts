@@ -17,10 +17,49 @@ export interface CitationMetadata {
   display_text: string;
   aliases?: string[];
   source_url?: string;
+  jurisdiction?: string;
+  source?: string;
+  article?: string;
+  publisher?: string;
+  license?: string;
+  effective_date?: string;
   lookup: {
     tool: string;
     args: Record<string, string>;
   };
+}
+
+export interface CitationAttribution {
+  jurisdiction?: string | null;
+  source?: string | null;
+  article?: string | null;
+  publisher?: string | null;
+  license?: string | null;
+  effective_date?: string | null;
+}
+
+function addIfPresent(
+  citation: CitationMetadata,
+  key: keyof CitationAttribution,
+  value: string | null | undefined,
+): void {
+  if (value && value.trim()) {
+    citation[key] = value;
+  }
+}
+
+export function withCitationAttribution(
+  citation: CitationMetadata,
+  attribution: CitationAttribution,
+): CitationMetadata {
+  const attributed: CitationMetadata = { ...citation };
+  addIfPresent(attributed, 'jurisdiction', attribution.jurisdiction);
+  addIfPresent(attributed, 'source', attribution.source);
+  addIfPresent(attributed, 'article', attribution.article);
+  addIfPresent(attributed, 'publisher', attribution.publisher);
+  addIfPresent(attributed, 'license', attribution.license);
+  addIfPresent(attributed, 'effective_date', attribution.effective_date);
+  return attributed;
 }
 
 /**

@@ -20,6 +20,21 @@ describe('searchCaseLaw', () => {
     expect(result._metadata.disclaimer).toContain('NOT LEGAL ADVICE');
   });
 
+  it('should attach non-empty citation metadata to each result', async () => {
+    const result = await searchCaseLaw(db, { query: 'onrechtmatige daad' });
+    expect(result.results.length).toBeGreaterThan(0);
+
+    for (const row of result.results) {
+      expect(row._citation?.canonical_ref).toBeTruthy();
+      expect(row._citation?.canonical_ref).toContain('ECLI:');
+      expect(row._citation?.article).toBeTruthy();
+      expect(row._citation?.source).toBeTruthy();
+      expect(row._citation?.source_url).toMatch(/^https:\/\/uitspraken\.rechtspraak\.nl\//);
+      expect(row._citation?.publisher).toBe('De Rechtspraak (Dutch Judiciary)');
+      expect(row._citation?.lookup.tool).toBe('search_case_law');
+    }
+  });
+
   it('should find case law by FTS query', async () => {
     const result = await searchCaseLaw(db, { query: 'onrechtmatige daad' });
     expect(result.results.length).toBeGreaterThan(0);

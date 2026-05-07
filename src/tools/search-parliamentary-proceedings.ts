@@ -2,6 +2,11 @@ import type { Database } from '@ansvar/mcp-sqlite';
 import { buildFtsQueryVariants } from '../utils/fts-query.js';
 import { generateResponseMetadata, type ToolResponse } from '../utils/metadata.js';
 import { hasTable } from '../capabilities.js';
+import {
+  buildCitation,
+  withCitationAttribution,
+  type CitationMetadata,
+} from '../utils/citation.js';
 
 export interface SearchParliamentaryProceedingsInput {
   query: string;
@@ -19,6 +24,7 @@ export interface SearchParliamentaryProceedingsResult {
   relevance: number | null;
   url: string | null;
   related_statute_id: string | null;
+  _citation?: CitationMetadata;
 }
 
 const MAX_LIMIT = 50;
@@ -75,6 +81,34 @@ function runFtsSearch(
   return db.prepare(sql).all(...params) as SearchParliamentaryProceedingsResult[];
 }
 
+function addResultCitations(
+  rows: SearchParliamentaryProceedingsResult[],
+): SearchParliamentaryProceedingsResult[] {
+  return rows.map((row) => {
+    const canonicalRef = `NL parliamentary proceeding ${row.id}`;
+    const citation = buildCitation(
+      canonicalRef,
+      row.title || canonicalRef,
+      'search_parliamentary_proceedings',
+      { query: row.title || canonicalRef },
+      row.url,
+      [row.related_statute_id].filter((value): value is string => Boolean(value)),
+    );
+
+    return {
+      ...row,
+      _citation: withCitationAttribution(citation, {
+        jurisdiction: 'NL',
+        source: row.title,
+        article: row.related_statute_id || canonicalRef,
+        publisher: 'Tweede Kamer / ParlaMint-NL',
+        license: 'Dutch parliamentary open data',
+        effective_date: row.issued_date,
+      }),
+    };
+  });
+}
+
 export async function searchParliamentaryProceedings(
   db: Database,
   input: SearchParliamentaryProceedingsInput,
@@ -116,5 +150,5 @@ export async function searchParliamentaryProceedings(
     results = runFtsSearch(db, variants.fallback, date_from, date_to, limit);
   }
 
-  return { results, _metadata: generateResponseMetadata(db) };
+  return { results: addResultCitations(results), _metadata: generateResponseMetadata(db) };
 }
