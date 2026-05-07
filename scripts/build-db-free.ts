@@ -20,7 +20,7 @@
  *   - case_law + case_law_fts
  *   - preparatory_works + prep_works_fts
  *   - case_law_full, preparatory_works_full
- *   - agency_guidance, agency_guidance_fts
+ *   - parliamentary_proceedings, parliamentary_proceedings_fts
  *
  * Usage: npm run build:db:free
  */
@@ -39,7 +39,7 @@ const FREE_DB = path.resolve(__dirname, '..', 'data', 'database-free.db');
 function sql(dbPath: string, query: string): string {
   return execFileSync('sqlite3', [dbPath, query], {
     encoding: 'utf-8',
-    timeout: 600_000,  // 10 minutes for VACUUM on large DBs
+    timeout: 600_000, // 10 minutes for VACUUM on large DBs
   }).trim();
 }
 
@@ -49,7 +49,7 @@ function buildFreeTier(): void {
   if (!fs.existsSync(FULL_DB)) {
     console.error(
       `ERROR: No full database found at ${FULL_DB}\n` +
-      `Run 'npm run build:db' first to create the base database.`
+        `Run 'npm run build:db' first to create the base database.`,
     );
     process.exit(1);
   }
@@ -85,10 +85,14 @@ function buildFreeTier(): void {
 
   // Tables to drop
   const tablesToDrop = [
-    'case_law_fts', 'case_law',
-    'prep_works_fts', 'preparatory_works',
-    'case_law_full', 'preparatory_works_full',
-    'agency_guidance_fts', 'agency_guidance',
+    'case_law_fts',
+    'case_law',
+    'prep_works_fts',
+    'preparatory_works',
+    'case_law_full',
+    'preparatory_works_full',
+    'parliamentary_proceedings_fts',
+    'parliamentary_proceedings',
   ];
 
   console.log('\n  Dropping tables:');
@@ -102,7 +106,10 @@ function buildFreeTier(): void {
   }
 
   // Drop triggers for dropped tables
-  const triggerList = sql(FREE_DB, "SELECT name || '|' || tbl_name FROM sqlite_master WHERE type = 'trigger';");
+  const triggerList = sql(
+    FREE_DB,
+    "SELECT name || '|' || tbl_name FROM sqlite_master WHERE type = 'trigger';",
+  );
   const droppedTableSet = new Set(tablesToDrop);
   for (const line of triggerList.split('\n').filter(Boolean)) {
     const parts = line.split('|');
@@ -115,36 +122,67 @@ function buildFreeTier(): void {
   }
 
   // Remove case_law and kamerstuk entries from legal_documents
-  const caseLawCount = sql(FREE_DB, "SELECT COUNT(*) FROM legal_documents WHERE type = 'case_law';");
-  const kamerstukCount = sql(FREE_DB, "SELECT COUNT(*) FROM legal_documents WHERE type = 'kamerstuk';");
+  const caseLawCount = sql(
+    FREE_DB,
+    "SELECT COUNT(*) FROM legal_documents WHERE type = 'case_law';",
+  );
+  const kamerstukCount = sql(
+    FREE_DB,
+    "SELECT COUNT(*) FROM legal_documents WHERE type = 'kamerstuk';",
+  );
 
   if (parseInt(caseLawCount) > 0) {
     // Clean up eu_references pointing to case_law documents
     if (existingTables.has('eu_references')) {
       sql(FREE_DB, "DELETE FROM eu_references WHERE source_type = 'case_law';");
-      sql(FREE_DB, "DELETE FROM eu_references WHERE document_id IN (SELECT id FROM legal_documents WHERE type = 'case_law');");
+      sql(
+        FREE_DB,
+        "DELETE FROM eu_references WHERE document_id IN (SELECT id FROM legal_documents WHERE type = 'case_law');",
+      );
     }
 
     // Clean up cross_references pointing to case_law documents
     if (existingTables.has('cross_references')) {
-      sql(FREE_DB, `DELETE FROM cross_references WHERE source_document_id IN (SELECT id FROM legal_documents WHERE type = 'case_law') OR target_document_id IN (SELECT id FROM legal_documents WHERE type = 'case_law');`);
+      sql(
+        FREE_DB,
+        `DELETE FROM cross_references WHERE source_document_id IN (SELECT id FROM legal_documents WHERE type = 'case_law') OR target_document_id IN (SELECT id FROM legal_documents WHERE type = 'case_law');`,
+      );
     }
 
     sql(FREE_DB, "DELETE FROM legal_documents WHERE type = 'case_law';");
-    console.log(`    Removed ${parseInt(caseLawCount).toLocaleString()} case_law documents from legal_documents`);
+    console.log(
+      `    Removed ${parseInt(caseLawCount).toLocaleString()} case_law documents from legal_documents`,
+    );
   }
 
   if (parseInt(kamerstukCount) > 0) {
     sql(FREE_DB, "DELETE FROM legal_documents WHERE type = 'kamerstuk';");
-    console.log(`    Removed ${parseInt(kamerstukCount).toLocaleString()} kamerstuk documents from legal_documents`);
+    console.log(
+      `    Removed ${parseInt(kamerstukCount).toLocaleString()} kamerstuk documents from legal_documents`,
+    );
   }
 
   // Ensure db_metadata table exists and update tier
-  sql(FREE_DB, "CREATE TABLE IF NOT EXISTS db_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);");
-  sql(FREE_DB, `INSERT INTO db_metadata (key, value) VALUES ('tier', 'free') ON CONFLICT(key) DO UPDATE SET value = excluded.value;`);
-  sql(FREE_DB, `INSERT INTO db_metadata (key, value) VALUES ('schema_version', '1') ON CONFLICT(key) DO UPDATE SET value = excluded.value;`);
-  sql(FREE_DB, `INSERT INTO db_metadata (key, value) VALUES ('built_at', '${new Date().toISOString()}') ON CONFLICT(key) DO UPDATE SET value = excluded.value;`);
-  sql(FREE_DB, `INSERT INTO db_metadata (key, value) VALUES ('builder', 'build-db-free.ts') ON CONFLICT(key) DO UPDATE SET value = excluded.value;`);
+  sql(
+    FREE_DB,
+    'CREATE TABLE IF NOT EXISTS db_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);',
+  );
+  sql(
+    FREE_DB,
+    `INSERT INTO db_metadata (key, value) VALUES ('tier', 'free') ON CONFLICT(key) DO UPDATE SET value = excluded.value;`,
+  );
+  sql(
+    FREE_DB,
+    `INSERT INTO db_metadata (key, value) VALUES ('schema_version', '1') ON CONFLICT(key) DO UPDATE SET value = excluded.value;`,
+  );
+  sql(
+    FREE_DB,
+    `INSERT INTO db_metadata (key, value) VALUES ('built_at', '${new Date().toISOString()}') ON CONFLICT(key) DO UPDATE SET value = excluded.value;`,
+  );
+  sql(
+    FREE_DB,
+    `INSERT INTO db_metadata (key, value) VALUES ('builder', 'build-db-free.ts') ON CONFLICT(key) DO UPDATE SET value = excluded.value;`,
+  );
 
   // Report remaining data
   const docCount = sql(FREE_DB, 'SELECT COUNT(*) FROM legal_documents;');
@@ -172,9 +210,9 @@ function buildFreeTier(): void {
 
   console.log(
     `\nFree-tier build complete.` +
-    `\n  Size: ${(fullSize / 1024 / 1024).toFixed(1)} MB -> ${(freeSize / 1024 / 1024).toFixed(1)} MB (${reduction}% reduction)` +
-    `\n  Tier: free` +
-    `\n  Output: ${FREE_DB}`
+      `\n  Size: ${(fullSize / 1024 / 1024).toFixed(1)} MB -> ${(freeSize / 1024 / 1024).toFixed(1)} MB (${reduction}% reduction)` +
+      `\n  Tier: free` +
+      `\n  Output: ${FREE_DB}`,
   );
 
   // Warn if too large for Vercel
@@ -182,8 +220,8 @@ function buildFreeTier(): void {
   if (freeSize > VERCEL_LIMIT) {
     console.warn(
       `\n  WARNING: Free-tier database is ${(freeSize / 1024 / 1024).toFixed(0)} MB.` +
-      `\n  This may be too large for Vercel Hobby plan (512 MB /tmp limit).` +
-      `\n  Consider further data trimming if deployment fails.`
+        `\n  This may be too large for Vercel Hobby plan (512 MB /tmp limit).` +
+        `\n  Consider further data trimming if deployment fails.`,
     );
   }
 }

@@ -45,7 +45,7 @@ function runFtsSearch(
   const conditions: string[] = [];
   const params: (string | number)[] = [];
 
-  conditions.push('agency_guidance_fts MATCH ?');
+  conditions.push('parliamentary_proceedings_fts MATCH ?');
   params.push(ftsQuery);
 
   if (dateFrom) {
@@ -66,14 +66,14 @@ function runFtsSearch(
       ag.title,
       ag.summary,
       ag.issued_date,
-      snippet(agency_guidance_fts, 2, '**', '**', '...', 32) AS snippet,
-      bm25(agency_guidance_fts) AS relevance,
+      snippet(parliamentary_proceedings_fts, 2, '**', '**', '...', 32) AS snippet,
+      bm25(parliamentary_proceedings_fts) AS relevance,
       ag.url,
       ag.related_statute_id
-    FROM agency_guidance_fts
-    JOIN agency_guidance AS ag ON agency_guidance_fts.rowid = ag.id
+    FROM parliamentary_proceedings_fts
+    JOIN parliamentary_proceedings AS ag ON parliamentary_proceedings_fts.rowid = ag.id
     ${whereClause}
-    ORDER BY bm25(agency_guidance_fts)
+    ORDER BY bm25(parliamentary_proceedings_fts)
     LIMIT ?
   `;
   params.push(limit);
@@ -117,8 +117,8 @@ export async function searchParliamentaryProceedings(
   db: Database,
   input: SearchParliamentaryProceedingsInput,
 ): Promise<ToolResponse<SearchParliamentaryProceedingsResult[]>> {
-  // Guard: check that agency_guidance table exists (missing on free tier)
-  if (!hasTable(db, 'agency_guidance')) {
+  // Guard: check that parliamentary_proceedings table exists (missing on free tier)
+  if (!hasTable(db, 'parliamentary_proceedings')) {
     return {
       results: [],
       _metadata: generateResponseMetadata(db),

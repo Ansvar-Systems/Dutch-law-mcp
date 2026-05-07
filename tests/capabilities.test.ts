@@ -28,7 +28,7 @@ function createPaidTierDb(): InstanceType<typeof Database> {
   db.exec(`
     CREATE TABLE case_law_full (id INTEGER PRIMARY KEY, full_text TEXT);
     CREATE TABLE preparatory_works_full (id INTEGER PRIMARY KEY, full_text TEXT);
-    CREATE TABLE agency_guidance (id INTEGER PRIMARY KEY, guidance TEXT);
+    CREATE TABLE parliamentary_proceedings (id INTEGER PRIMARY KEY, guidance TEXT);
   `);
   return db;
 }
@@ -68,7 +68,7 @@ describe('detectCapabilities', () => {
 
     expect(caps.has('expanded_case_law')).toBe(false);
     expect(caps.has('full_preparatory_works')).toBe(false);
-    expect(caps.has('agency_guidance')).toBe(false);
+    expect(caps.has('parliamentary_proceedings')).toBe(false);
 
     expect(caps.size).toBe(3);
   });
@@ -82,7 +82,7 @@ describe('detectCapabilities', () => {
     expect(caps.has('eu_references')).toBe(true);
     expect(caps.has('expanded_case_law')).toBe(true);
     expect(caps.has('full_preparatory_works')).toBe(true);
-    expect(caps.has('agency_guidance')).toBe(true);
+    expect(caps.has('parliamentary_proceedings')).toBe(true);
 
     expect(caps.size).toBe(6);
   });
@@ -180,7 +180,7 @@ describe('isProfessionalCapability', () => {
   it('should return true for paid capabilities', () => {
     expect(isProfessionalCapability('expanded_case_law')).toBe(true);
     expect(isProfessionalCapability('full_preparatory_works')).toBe(true);
-    expect(isProfessionalCapability('agency_guidance')).toBe(true);
+    expect(isProfessionalCapability('parliamentary_proceedings')).toBe(true);
   });
 
   it('should return false for free capabilities', () => {
