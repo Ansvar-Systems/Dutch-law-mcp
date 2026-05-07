@@ -139,4 +139,14 @@ describe('searchCaseLaw', () => {
     expect(rvs).toBeDefined();
     expect(rvs!.ecli).toBe('ECLI:NL:RVS:2020:1234');
   });
+
+  it('keys lookup.args by document_id when ecli is null', async () => {
+    const result = await searchCaseLaw(db, { query: 'nullecli' });
+    expect(result.results.length).toBeGreaterThan(0);
+    const row = result.results.find((r) => r.document_id === 'INT-CASE-NULL-ECLI-001');
+    expect(row).toBeDefined();
+    expect(row!.ecli).toBeNull();
+    expect(row!._citation?.lookup.args).toEqual({ document_id: 'INT-CASE-NULL-ECLI-001' });
+    expect(row!._citation?.lookup.args).not.toHaveProperty('ecli');
+  });
 });

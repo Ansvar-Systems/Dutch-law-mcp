@@ -385,6 +385,18 @@ const SAMPLE_DOCUMENTS = [
     description: 'Onrechtmatige daad; schadevergoeding',
   },
   {
+    id: 'INT-CASE-NULL-ECLI-001',
+    type: 'case_law',
+    title: 'Internal case identifier (no ECLI assigned)',
+    title_en: null,
+    short_name: null,
+    status: 'in_force',
+    issued_date: '2024-01-15',
+    in_force_date: null,
+    url: null,
+    description: 'Synthetic fixture for null-ecli lookup keying test',
+  },
+  {
     id: 'ECLI:NL:RVS:2020:1234',
     type: 'case_law',
     title: 'Raad van State 10 juni 2020',
@@ -590,6 +602,17 @@ const SAMPLE_CASE_LAW = [
     summary:
       'De Afdeling bestuursrechtspraak van de Raad van State bevestigde het besluit van het bestuursorgaan inzake handhaving op grond van de Algemene wet bestuursrecht.',
     keywords: 'bestuursrecht handhaving Awb besluit bestuursorgaan',
+  },
+  {
+    document_id: 'INT-CASE-NULL-ECLI-001',
+    court: 'CBb',
+    ecli: null,
+    case_number: 'INT-2024-001',
+    decision_date: '2024-01-15',
+    procedure_type: 'Bezwaar',
+    legal_domain: 'Bestuursrecht',
+    summary: 'synthetisch fixture nullecli token',
+    keywords: 'nullecli synthetisch fixture',
   },
 ];
 
