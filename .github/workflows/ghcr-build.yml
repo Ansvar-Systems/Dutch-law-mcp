@@ -89,13 +89,27 @@ jobs:
               exit 1
             fi
 
-            echo "Downloading database.db.gz from release $TAG..."
+            echo "Downloading *.db.gz from release $TAG..."
             mkdir -p data
-            if gh release download "$TAG" -p "database.db.gz" -D data/ 2>/dev/null; then
-              gunzip -f data/database.db.gz
-              echo "OK: Downloaded $(du -sh data/database.db | cut -f1) from release $TAG"
+            # Match any .db.gz asset; some MCPs publish database.db.gz, others publish <name>-free.db.gz
+            if gh release download "$TAG" -p "*.db.gz" -D data/ 2>/dev/null; then
+              for gz in data/*.db.gz; do
+                [ -e "$gz" ] || continue
+                gunzip -f "$gz"
+              done
+              # Normalize to data/database.db so the Dockerfile COPY succeeds regardless of asset naming
+              if [ ! -f data/database.db ]; then
+                first_db=$(ls data/*.db 2>/dev/null | head -1)
+                [ -n "$first_db" ] && mv "$first_db" data/database.db
+              fi
+              if [ -f data/database.db ]; then
+                echo "OK: $(du -sh data/database.db | cut -f1) from release $TAG"
+              else
+                echo "ERROR: archive downloaded but no .db file produced"
+                exit 1
+              fi
             else
-              echo "ERROR: Could not download database.db.gz from release $TAG"
+              echo "ERROR: Could not download *.db.gz from release $TAG"
               exit 1
             fi
           done
@@ -142,3 +156,28 @@ jobs:
           echo "| Tags | $(echo '${{ steps.meta.outputs.tags }}' | tr '\n' ', ') |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Branch | \`${{ github.ref_name }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Commit | \`${{ github.sha }}\` |" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Trigger Watchtower update on prod
+        if: success() && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        env:
+          WATCHTOWER_TOKEN: ${{ secrets.WATCHTOWER_HTTP_API_TOKEN }}
+        run: |
+          if [ -z "$WATCHTOWER_TOKEN" ]; then
+            echo "WATCHTOWER_HTTP_API_TOKEN not set — skipping kick. Prod will swap on next hourly Watchtower poll."
+            echo "To enable near-instant deploys, add this secret to the repo (value lives in /opt/ansvar/prod/mcp/watchtower/.env on the prod host)."
+            exit 0
+          fi
+          echo "Kicking Watchtower /v1/update..."
+          HTTP=$(curl -X POST -sS -o /tmp/watchtower-response \
+            -H "Authorization: Bearer $WATCHTOWER_TOKEN" \
+            -w "%{http_code}" \
+            https://watchtower.ansvar.eu/v1/update) || HTTP="000"
+          echo "Response code: $HTTP"
+          head -c 500 /tmp/watchtower-response 2>/dev/null || true
+          echo
+          if [ "$HTTP" = "200" ]; then
+            echo "OK: Watchtower scan triggered — prod should swap container within seconds."
+          else
+            echo "WARN: Watchtower kick returned HTTP $HTTP. Hourly poll will swap eventually."
+          fi
