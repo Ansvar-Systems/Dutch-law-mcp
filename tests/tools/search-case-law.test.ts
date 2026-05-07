@@ -31,6 +31,7 @@ describe('searchCaseLaw', () => {
       expect(row._citation?.source).toBeTruthy();
       expect(row._citation?.source_url).toMatch(/^https:\/\/uitspraken\.rechtspraak\.nl\//);
       expect(row._citation?.publisher).toBe('De Rechtspraak (Dutch Judiciary)');
+      expect(row._citation?.license).toBe('Public-Domain');
       expect(row._citation?.lookup.tool).toBe('search_case_law');
     }
   });

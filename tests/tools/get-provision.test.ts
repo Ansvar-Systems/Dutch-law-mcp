@@ -132,4 +132,20 @@ describe('getProvision', () => {
     expect(result.results).toHaveLength(1);
     expect(result.results[0].title).toBe('Beroep bij de bestuursrechter');
   });
+
+  it('emits _citation with Public-Domain license on the article path', async () => {
+    const result = await getProvision(db, { document_id: 'BWBR0005289', provision_ref: '6:162' });
+    expect(result._citation).toBeDefined();
+    expect(result._citation?.license).toBe('Public-Domain');
+    expect(result._citation?.publisher).toBe('Dutch Government (wetten.overheid.nl)');
+    expect(result._citation?.canonical_ref).toBeTruthy();
+  });
+
+  it('emits _citation when caller provides only document_id (no article)', async () => {
+    const result = await getProvision(db, { document_id: 'BWBR0001854' });
+    expect(result.results.length).toBeGreaterThan(0);
+    expect(result._citation).toBeDefined();
+    expect(result._citation?.license).toBe('Public-Domain');
+    expect(result._citation?.canonical_ref).toBeTruthy();
+  });
 });
