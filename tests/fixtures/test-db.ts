@@ -168,7 +168,7 @@ CREATE TRIGGER prep_works_ad AFTER DELETE ON preparatory_works BEGIN
   VALUES ('delete', old.id, old.title, old.summary);
 END;
 
-CREATE TABLE agency_guidance (
+CREATE TABLE parliamentary_proceedings (
   id INTEGER PRIMARY KEY,
   agency TEXT NOT NULL,
   document_id TEXT,
@@ -180,20 +180,20 @@ CREATE TABLE agency_guidance (
   related_statute_id TEXT
 );
 
-CREATE VIRTUAL TABLE agency_guidance_fts USING fts5(
+CREATE VIRTUAL TABLE parliamentary_proceedings_fts USING fts5(
   title, summary, full_text,
-  content='agency_guidance',
+  content='parliamentary_proceedings',
   content_rowid='id',
   tokenize='unicode61'
 );
 
-CREATE TRIGGER agency_guidance_ai AFTER INSERT ON agency_guidance BEGIN
-  INSERT INTO agency_guidance_fts(rowid, title, summary, full_text)
+CREATE TRIGGER parliamentary_proceedings_ai AFTER INSERT ON parliamentary_proceedings BEGIN
+  INSERT INTO parliamentary_proceedings_fts(rowid, title, summary, full_text)
   VALUES (new.id, new.title, new.summary, new.full_text);
 END;
 
-CREATE TRIGGER agency_guidance_ad AFTER DELETE ON agency_guidance BEGIN
-  INSERT INTO agency_guidance_fts(agency_guidance_fts, rowid, title, summary, full_text)
+CREATE TRIGGER parliamentary_proceedings_ad AFTER DELETE ON parliamentary_proceedings BEGIN
+  INSERT INTO parliamentary_proceedings_fts(parliamentary_proceedings_fts, rowid, title, summary, full_text)
   VALUES ('delete', old.id, old.title, old.summary, old.full_text);
 END;
 
@@ -899,7 +899,7 @@ export function createTestDatabase(): InstanceType<typeof Database> {
 
     // Agency guidance (parliamentary proceedings)
     const insertGuidance = db.prepare(
-      `INSERT INTO agency_guidance (agency, document_id, title, summary, full_text, issued_date, url, related_statute_id)
+      `INSERT INTO parliamentary_proceedings (agency, document_id, title, summary, full_text, issued_date, url, related_statute_id)
        VALUES (@agency, @document_id, @title, @summary, @full_text, @issued_date, @url, @related_statute_id)`,
     );
     for (const ag of SAMPLE_AGENCY_GUIDANCE) {

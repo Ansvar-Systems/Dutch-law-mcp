@@ -55,8 +55,8 @@ CREATE TABLE IF NOT EXISTS preparatory_works_full (
 CREATE INDEX IF NOT EXISTS idx_prep_works_full_prep
   ON preparatory_works_full(prep_work_id);
 
--- Agency guidance documents (paid tier)
-CREATE TABLE IF NOT EXISTS agency_guidance (
+-- Parliamentary proceedings (paid tier; kamer-level transcripts and floor speeches)
+CREATE TABLE IF NOT EXISTS parliamentary_proceedings (
   id INTEGER PRIMARY KEY,
   agency TEXT NOT NULL,
   document_id TEXT NOT NULL UNIQUE,
@@ -68,15 +68,15 @@ CREATE TABLE IF NOT EXISTS agency_guidance (
   related_statute_id TEXT REFERENCES legal_documents(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_agency_guidance_agency
-  ON agency_guidance(agency);
-CREATE INDEX IF NOT EXISTS idx_agency_guidance_statute
-  ON agency_guidance(related_statute_id);
+CREATE INDEX IF NOT EXISTS idx_parliamentary_proceedings_agency
+  ON parliamentary_proceedings(agency);
+CREATE INDEX IF NOT EXISTS idx_parliamentary_proceedings_statute
+  ON parliamentary_proceedings(related_statute_id);
 
--- FTS5 for agency guidance search
-CREATE VIRTUAL TABLE IF NOT EXISTS agency_guidance_fts USING fts5(
+-- FTS5 for parliamentary proceedings search
+CREATE VIRTUAL TABLE IF NOT EXISTS parliamentary_proceedings_fts USING fts5(
   title, summary, full_text,
-  content='agency_guidance',
+  content='parliamentary_proceedings',
   content_rowid='id',
   tokenize='unicode61'
 );
@@ -93,7 +93,7 @@ function buildPaidTier(): void {
   if (!fs.existsSync(DB_PATH)) {
     console.error(
       `ERROR: No base database found at ${DB_PATH}\n` +
-      `Run 'npm run build:db' first to create the base database from seeds.`
+        `Run 'npm run build:db' first to create the base database from seeds.`,
     );
     process.exit(1);
   }
@@ -106,12 +106,14 @@ function buildPaidTier(): void {
   db.pragma('journal_mode = WAL');
 
   // Verify base schema exists
-  const hasLegalDocs = db.prepare(
-    "SELECT name FROM sqlite_master WHERE type='table' AND name='legal_documents'"
-  ).get();
+  const hasLegalDocs = db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='legal_documents'")
+    .get();
 
   if (!hasLegalDocs) {
-    console.error('ERROR: Base database is missing legal_documents table. Rebuild with: npm run build:db');
+    console.error(
+      'ERROR: Base database is missing legal_documents table. Rebuild with: npm run build:db',
+    );
     db.close();
     process.exit(1);
   }
@@ -126,8 +128,12 @@ function buildPaidTier(): void {
 
   // Report what's available
   const caseCount = (db.prepare('SELECT COUNT(*) as c FROM case_law').get() as { c: number }).c;
-  const provisionCount = (db.prepare('SELECT COUNT(*) as c FROM legal_provisions').get() as { c: number }).c;
-  const prepCount = (db.prepare('SELECT COUNT(*) as c FROM preparatory_works').get() as { c: number }).c;
+  const provisionCount = (
+    db.prepare('SELECT COUNT(*) as c FROM legal_provisions').get() as { c: number }
+  ).c;
+  const prepCount = (
+    db.prepare('SELECT COUNT(*) as c FROM preparatory_works').get() as { c: number }
+  ).c;
 
   console.log(`\n  Base data available:`);
   console.log(`    Provisions:        ${provisionCount.toLocaleString()}`);
@@ -135,7 +141,7 @@ function buildPaidTier(): void {
   console.log(`    Preparatory works: ${prepCount.toLocaleString()}`);
 
   // Check paid tables for data
-  const paidTables = ['case_law_full', 'preparatory_works_full', 'agency_guidance'];
+  const paidTables = ['case_law_full', 'preparatory_works_full', 'parliamentary_proceedings'];
   console.log(`\n  Paid-tier tables (stub — no data sources connected yet):`);
   for (const table of paidTables) {
     const row = db.prepare(`SELECT COUNT(*) as c FROM ${table}`).get() as { c: number };
@@ -164,15 +170,17 @@ function buildPaidTier(): void {
   const sizeAfter = fs.statSync(DB_PATH).size;
   console.log(
     `\nPaid-tier build complete.` +
-    `\n  Size: ${(sizeBefore / 1024 / 1024).toFixed(1)} MB -> ${(sizeAfter / 1024 / 1024).toFixed(1)} MB` +
-    `\n  Tier: professional` +
-    `\n  Output: ${DB_PATH}`
+      `\n  Size: ${(sizeBefore / 1024 / 1024).toFixed(1)} MB -> ${(sizeAfter / 1024 / 1024).toFixed(1)} MB` +
+      `\n  Tier: professional` +
+      `\n  Output: ${DB_PATH}`,
   );
 
   console.log(`\n  NOTE: Paid-tier tables are empty stubs. To populate them:`);
-  console.log(`    1. case_law_full -- needs full-text opinion source from rechtspraak.nl (future)`);
+  console.log(
+    `    1. case_law_full -- needs full-text opinion source from rechtspraak.nl (future)`,
+  );
   console.log(`    2. preparatory_works_full -- needs Kamerstukken full-text API (future)`);
-  console.log(`    3. agency_guidance -- needs agency document scrapers (future)`);
+  console.log(`    3. parliamentary_proceedings -- needs agency document scrapers (future)`);
 }
 
 buildPaidTier();
