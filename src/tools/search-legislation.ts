@@ -191,8 +191,9 @@ function addResultCitations(rows: SearchLegislationResult[]): SearchLegislationR
       ...row,
       _citation: withCitationAttribution(citation, {
         jurisdiction: 'NL',
-        source: row.document_title,
-        article: row.article || row.provision_ref,
+        source: row.document_id,
+        source_full_name: row.document_title,
+        article: row.provision_ref || row.article,
         publisher: 'Dutch Government (wetten.overheid.nl)',
         license: 'Public-Domain',
         effective_date: row.effective_date || row.valid_from || null,

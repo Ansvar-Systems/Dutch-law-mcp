@@ -158,8 +158,9 @@ export async function getProvision(
         ),
         {
           jurisdiction: 'NL',
-          source: firstResult.document_title,
-          article: firstResult.article || firstResult.provision_ref || null,
+          source: firstResult.document_id,
+          source_full_name: firstResult.document_title,
+          article: firstResult.provision_ref || firstResult.article || null,
           publisher: 'Dutch Government (wetten.overheid.nl)',
           license: 'Public-Domain',
           effective_date: firstResult.effective_date || firstResult.valid_from || null,

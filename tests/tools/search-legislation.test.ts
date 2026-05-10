@@ -27,8 +27,11 @@ describe('searchLegislation', () => {
     for (const row of result.results) {
       expect(row._citation?.canonical_ref).toBeTruthy();
       expect(row._citation?.display_text).toBeTruthy();
-      expect(row._citation?.article).toBeTruthy();
-      expect(row._citation?.source).toBeTruthy();
+      expect(row._citation?.article).toBe(row.provision_ref);
+      expect(row._citation?.source).toBe(row.document_id);
+      expect(row._citation?.source_full_name).toBe(row.document_title);
+      expect(row._citation?.lookup.args.document_id).toBe(row.document_id);
+      expect(row._citation?.lookup.args.section).toBe(row.provision_ref);
       expect(row._citation?.source_url).toMatch(/^https:\/\/wetten\.overheid\.nl\//);
       expect(row._citation?.publisher).toBe('Dutch Government (wetten.overheid.nl)');
       expect(row._citation?.license).toBe('Public-Domain');
