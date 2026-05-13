@@ -32,13 +32,36 @@ interface SeedDoc {
   url: string;
 }
 
+async function fetchWithRetry(url: string, maxAttempts = 4): Promise<Response | null> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(url, { redirect: 'follow' });
+      if (res.ok) return res;
+      // Retry only on 5xx / 429 / network-class statuses
+      if (res.status >= 500 || res.status === 429) {
+        await new Promise((r) => setTimeout(r, 1000 * attempt));
+        continue;
+      }
+      // 4xx (except 429) — non-retryable
+      return res;
+    } catch (err) {
+      lastErr = err;
+      // Exponential-ish backoff: 1s, 2s, 4s, 8s
+      await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+    }
+  }
+  console.error(`  Retries exhausted for ${url}: ${String(lastErr)}`);
+  return null;
+}
+
 async function fetchBwb(bwbId: string): Promise<void> {
   const url = `${BWB_XML_BASE}/${bwbId}/xml/${bwbId}.xml`;
   console.log(`Fetching ${bwbId} from ${url}`);
 
-  const res = await fetch(url, { redirect: 'follow' });
-  if (!res.ok) {
-    console.error(`  HTTP ${res.status} — skipping`);
+  const res = await fetchWithRetry(url);
+  if (!res || !res.ok) {
+    console.error(`  HTTP ${res?.status ?? 'no-response'} — skipping`);
     return;
   }
   const xml = await res.text();
@@ -86,15 +109,63 @@ async function fetchBwb(bwbId: string): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const ids = process.argv.slice(2);
+  const args = process.argv.slice(2);
+  let concurrency = 1;
+  const ids: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--concurrency' && i + 1 < args.length) {
+      concurrency = Math.max(1, parseInt(args[i + 1], 10) || 1);
+      i++;
+    } else {
+      ids.push(args[i]);
+    }
+  }
   if (ids.length === 0) {
-    console.error('Usage: tsx scripts/ingest-single-bwb.ts BWBR0040940 [BWBR... ...]');
+    console.error(
+      'Usage: tsx scripts/ingest-single-bwb.ts [--concurrency N] BWBR0040940 [BWBR... ...]',
+    );
     process.exit(1);
   }
-  for (const id of ids) {
-    await fetchBwb(id);
-    await new Promise((r) => setTimeout(r, 500));
+
+  if (concurrency === 1) {
+    for (const id of ids) {
+      await fetchBwb(id);
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    return;
   }
+
+  // Worker-pool concurrency. Keep N inflight at once, push the next one
+  // into the queue as each finishes. Lets the long fetches/parses for
+  // big statutes (e.g. Wetboek van Strafrecht has 670+ provisions) overlap
+  // with smaller ones, cutting wall-clock time ~Nx for N concurrent workers.
+  const queue = [...ids];
+  let active = 0;
+  let done = 0;
+  await new Promise<void>((resolve) => {
+    const spawn = (): void => {
+      if (queue.length === 0 && active === 0) {
+        resolve();
+        return;
+      }
+      while (active < concurrency && queue.length > 0) {
+        const id = queue.shift();
+        if (!id) break;
+        active++;
+        fetchBwb(id)
+          .catch((err) => {
+            console.error(`  FATAL ${id}: ${String(err)}`);
+          })
+          .finally(() => {
+            active--;
+            done++;
+            spawn();
+          });
+      }
+    };
+    spawn();
+  });
+  console.log(`Done: ${done} fetched (${ids.length} requested)`);
 }
 
 void main();
