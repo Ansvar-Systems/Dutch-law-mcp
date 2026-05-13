@@ -8,14 +8,24 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# curl/gzip needed by download-db.sh
+RUN apk add --no-cache curl gzip
+
 COPY package*.json ./
 RUN npm ci --ignore-scripts && npm cache clean --force
 COPY tsconfig.json ./
 COPY src/ ./src/
-COPY scripts/ ./scripts/
+COPY scripts/download-db.sh ./scripts/download-db.sh
 RUN npm run build
 COPY data/ ./data/
-RUN if npm run 2>/dev/null | grep -q "build:db"; then npm run build:db; fi
+# Provision database. Prefer download:db (ship-via-release pattern: the
+# pre-built DB is uploaded to GitHub Releases and not committed). Fall back
+# to build:db if download:db isn't defined (seeds-in-repo pattern).
+RUN if npm run 2>/dev/null | grep -q "^  download:db"; then \
+      npm run download:db; \
+    elif npm run 2>/dev/null | grep -q "^  build:db"; then \
+      npm run build:db; \
+    fi
 
 FROM node:20-alpine AS runtime
 
