@@ -70,8 +70,32 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Build database
+      - name: Provision database
         run: |
+          # Two patterns are supported:
+          # 1. seeds-in-repo: data/seed/*.json is committed; build:db produces
+          #    the SQLite file in-CI from seeds.
+          # 2. ship-via-release: data/seed/ is NOT committed (too large); the
+          #    pre-built database.db is uploaded to GitHub Releases and
+          #    download:db pulls it.
+          # Prefer (2) when both scripts exist — it's cheaper and produces a
+          # populated DB. Fall back to (1) when only build:db is present.
+          DB_PATH=$(jq -r '.scripts["build:db"] // empty' package.json | grep -oE 'data/[a-zA-Z0-9_-]+\.db' | head -1)
+          DB_PATH=${DB_PATH:-data/database.db}
+
+          if jq -e '.scripts["download:db"]' package.json >/dev/null 2>&1; then
+            echo "download:db present — pulling pre-built DB from latest GitHub Release"
+            if npm run download:db 2>&1; then
+              if [ -f "$DB_PATH" ] && [ "$(wc -c < "$DB_PATH")" -gt 1024 ]; then
+                echo "Provisioned DB at $DB_PATH ($(wc -c < "$DB_PATH") bytes) via download:db"
+                exit 0
+              fi
+              echo "::warning::download:db succeeded but DB at $DB_PATH is missing or <1KB — falling back to build:db"
+            else
+              echo "::warning::download:db failed — falling back to build:db"
+            fi
+          fi
+
           if jq -e '.scripts["build:db"]' package.json >/dev/null 2>&1; then
             if [ "${{ steps.changes.outputs.db_changed }}" = "true" ]; then
               npm run build:db
@@ -79,7 +103,7 @@ jobs:
               echo "No data/ingestion/schema change detected — skipping build:db"
             fi
           else
-            echo "build:db script not present — skipping (native-curated MCP without DB build step)"
+            echo "neither download:db nor build:db present — skipping (native-curated MCP)"
           fi
 
       - name: Type check
@@ -104,25 +128,6 @@ jobs:
             exit $EC
           else
             echo "test script not present — skipping (no unit tests in this MCP)"
-          fi
-
-      - name: Download database (if needed)
-        if: ${{ !cancelled() }}
-        run: |
-          # Contract tests need a populated DB. If build:db was skipped and no
-          # DB exists, pull the latest pre-built one from GitHub Releases via
-          # the canonical download:db script.
-          DB_PATH=$(jq -r '.scripts["build:db"] // empty' package.json | grep -oE 'data/[a-zA-Z0-9_-]+\.db' | head -1)
-          DB_PATH=${DB_PATH:-data/database.db}
-          if [ -f "$DB_PATH" ] && [ "$(wc -c < "$DB_PATH")" -gt 1024 ]; then
-            echo "DB already present at $DB_PATH ($(wc -c < "$DB_PATH") bytes) — skipping download"
-            exit 0
-          fi
-          if jq -e '.scripts["download:db"]' package.json >/dev/null 2>&1; then
-            echo "Downloading pre-built DB for contract tests..."
-            npm run download:db || echo "::warning::download:db failed — contract tests may fail against empty DB"
-          else
-            echo "download:db script not present — skipping (MCP rebuilds DB in-line)"
           fi
 
       - name: Contract tests
