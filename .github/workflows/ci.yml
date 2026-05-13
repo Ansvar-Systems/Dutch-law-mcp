@@ -106,6 +106,25 @@ jobs:
             echo "test script not present — skipping (no unit tests in this MCP)"
           fi
 
+      - name: Download database (if needed)
+        if: ${{ !cancelled() }}
+        run: |
+          # Contract tests need a populated DB. If build:db was skipped and no
+          # DB exists, pull the latest pre-built one from GitHub Releases via
+          # the canonical download:db script.
+          DB_PATH=$(jq -r '.scripts["build:db"] // empty' package.json | grep -oE 'data/[a-zA-Z0-9_-]+\.db' | head -1)
+          DB_PATH=${DB_PATH:-data/database.db}
+          if [ -f "$DB_PATH" ] && [ "$(wc -c < "$DB_PATH")" -gt 1024 ]; then
+            echo "DB already present at $DB_PATH ($(wc -c < "$DB_PATH") bytes) — skipping download"
+            exit 0
+          fi
+          if jq -e '.scripts["download:db"]' package.json >/dev/null 2>&1; then
+            echo "Downloading pre-built DB for contract tests..."
+            npm run download:db || echo "::warning::download:db failed — contract tests may fail against empty DB"
+          else
+            echo "download:db script not present — skipping (MCP rebuilds DB in-line)"
+          fi
+
       - name: Contract tests
         run: |
           if jq -e '.scripts["test:contract"]' package.json >/dev/null 2>&1; then
