@@ -29,15 +29,59 @@ jobs:
         run: npm run drift:detect || echo "drift_detected=true" >> "$GITHUB_OUTPUT"
         continue-on-error: true
 
-      - name: Create drift issue
+      - name: Create or update drift issue (dedup)
         if: steps.drift.outputs.drift_detected == 'true'
         uses: actions/github-script@v7
         with:
           script: |
-            await github.rest.issues.create({
+            const today = new Date().toISOString().split('T')[0];
+            const runNum = context.runNumber;
+            const body = [
+              'Nightly drift detection found hash mismatches between MCP output and upstream sources.',
+              '',
+              `Last detected: ${today} (run #${runNum}).`,
+              '',
+              'Run `npm run drift:detect` locally to see details. See `fixtures/golden-hashes.json` for anchored provisions.',
+            ].join('\n');
+
+            const { data: open } = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `Upstream drift detected — ${new Date().toISOString().split('T')[0]}`,
-              body: 'Nightly drift detection found hash mismatches between MCP output and upstream sources.\n\nRun `npm run drift:detect` locally to see details.\n\nSee `fixtures/golden-hashes.json` for anchored provisions.',
-              labels: ['data-drift', 'automated']
+              state: 'open',
+              labels: 'data-drift,automated',
+              per_page: 100,
             });
+
+            if (open.length > 0) {
+              const issue = open[0];
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                title: `Upstream drift — ongoing (last detected ${today})`,
+                body,
+              });
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `Drift still present on ${today} (run #${runNum}).`,
+              });
+              for (const dup of open.slice(1)) {
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: dup.number,
+                  state: 'closed',
+                  state_reason: 'not_planned',
+                });
+              }
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `Upstream drift detected — ${today}`,
+                body,
+                labels: ['data-drift', 'automated'],
+              });
+            }
