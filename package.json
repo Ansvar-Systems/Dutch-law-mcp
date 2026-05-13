@@ -69,7 +69,7 @@
     "lint-staged": "^16.1.0",
     "prettier": "^3.5.3",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.3",
     "typescript-eslint": "^8.33.1",
     "vitest": "^4.0.18"
   },
