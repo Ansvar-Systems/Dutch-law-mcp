@@ -322,7 +322,9 @@ describe('parseBwbXml', () => {
     it('should not prefix with lid number for direct al', () => {
       const result = parseBwbXml(DIRECT_AL_XML);
       // Direct al has no lid prefix
-      expect(result.provisions[0].content).toBe('Deze wet is van toepassing op alle rechtsverhoudingen.');
+      expect(result.provisions[0].content).toBe(
+        'Deze wet is van toepassing op alle rechtsverhoudingen.',
+      );
     });
   });
 
@@ -342,6 +344,43 @@ describe('parseBwbXml', () => {
       const result = parseBwbXml(MULTIPLE_ARTICLES_XML);
       expect(result.provisions[0].title).toBe('Onrechtmatige daad');
       expect(result.provisions[1].title).toBe('Toerekening');
+    });
+  });
+
+  describe('in_force_date extraction', () => {
+    const TOESTAND_WITH_DATE = `<?xml version="1.0" encoding="UTF-8"?>
+<toestand bwb-id="BWBR0040940" inwerkingtreding="2018-05-25">
+  <wetgeving bwb-id="BWBR0040940">
+    <intitule>Uitvoeringswet AVG</intitule>
+    <wet-besluit>
+      <wettekst>
+        <artikel bwb-ng-variabel-deel="/join/id/regdata/BWBR0040940/2018-05-25/0/artikel_5">
+          <kop><label>Artikel</label><nr>5</nr></kop>
+          <al>Test content.</al>
+        </artikel>
+      </wettekst>
+    </wet-besluit>
+  </wetgeving>
+</toestand>`;
+
+    it('extracts inwerkingtreding attribute from toestand root', () => {
+      const result = parseBwbXml(TOESTAND_WITH_DATE);
+      expect(result.in_force_date).toBe('2018-05-25');
+      expect(result.bwb_id).toBe('BWBR0040940');
+    });
+
+    it('omits in_force_date for legacy wet-besluit-only fixtures', () => {
+      const result = parseBwbXml(BW_ARTICLE_XML);
+      expect(result.in_force_date).toBeUndefined();
+    });
+
+    it('ignores malformed inwerkingtreding values', () => {
+      const xml = TOESTAND_WITH_DATE.replace(
+        'inwerkingtreding="2018-05-25"',
+        'inwerkingtreding="bogus"',
+      );
+      const result = parseBwbXml(xml);
+      expect(result.in_force_date).toBeUndefined();
     });
   });
 

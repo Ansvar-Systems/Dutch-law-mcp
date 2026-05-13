@@ -185,6 +185,7 @@ async function fetchAndParseBWB(
   toestandUrl?: string,
 ): Promise<{
   title: string;
+  in_force_date?: string;
   provisions: Array<{
     provision_ref: string;
     book?: string;
@@ -209,6 +210,7 @@ async function fetchAndParseBWB(
 
     return {
       title: parsed.title,
+      in_force_date: parsed.in_force_date,
       provisions: parsed.provisions,
     };
   } catch (err) {
@@ -232,6 +234,7 @@ function writeSeedFile(
     title?: string;
     content: string;
   }>,
+  options: { in_force_date?: string } = {},
 ): void {
   const seedData = {
     documents: [
@@ -240,6 +243,7 @@ function writeSeedFile(
         type: 'statute' as const,
         title,
         status: 'in_force',
+        ...(options.in_force_date ? { in_force_date: options.in_force_date } : {}),
         url: `https://wetten.overheid.nl/${bwbId}`,
       },
     ],
@@ -329,7 +333,9 @@ async function main(): Promise<void> {
     const result = await fetchAndParseBWB(record.bwbId, record.toestandUrl);
 
     if (result && result.provisions.length > 0) {
-      writeSeedFile(record.bwbId, result.title || record.title, result.provisions);
+      writeSeedFile(record.bwbId, result.title || record.title, result.provisions, {
+        in_force_date: result.in_force_date,
+      });
       console.log(`    Parsed ${result.provisions.length} provisions`);
       successCount++;
     } else if (result) {
