@@ -64,7 +64,8 @@ const DEFINITION_HEADER = /(?:wordt\s+verstaan\s+onder|begripsbepalingen|definit
 const LETTERED_ITEM = /^([a-z])\.\s*([^:]+?):\s*(.+?)(?:;|$)/gim;
 
 // Match individual inline definitions with various quote styles
-const INLINE_DEFINITION = /(?:onder|met)\s+[""«]([^""»]+)[""»]\s+wordt.*?verstaan:?\s*(.+?)(?:[.;]|$)/gi;
+const INLINE_DEFINITION =
+  /(?:onder|met)\s+[""«]([^""»]+)[""»]\s+wordt.*?verstaan:?\s*(.+?)(?:[.;]|$)/gi;
 
 // Match alternative format: "verordening: Verordening (EU)..."
 const COLON_DEFINITION = /^([a-zA-Z][a-zA-Z\s]+?):\s*(.+?)(?:;|$)/gm;
@@ -88,10 +89,7 @@ function cleanTerm(term: string): string {
  * Clean extracted definitions - normalize whitespace, remove trailing punctuation
  */
 function cleanDefinition(definition: string): string {
-  return definition
-    .trim()
-    .replace(/\s+/g, ' ')
-    .replace(/[;.]$/, '');
+  return definition.trim().replace(/\s+/g, ' ').replace(/[;.]$/, '');
 }
 
 /**
@@ -273,7 +271,7 @@ function readBWBSeedFiles(): SeedFile[] {
         console.log(`  Read ${file} (${parsed.provisions.length} provisions)`);
       }
     } catch (err) {
-      console.error(`  WARNING: Failed to parse ${file}: ${err}`);
+      console.error(`  WARNING: Failed to parse ${file}: ${String(err)}`);
     }
   }
 

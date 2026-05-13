@@ -38,10 +38,19 @@ const MAX_BATCHES = 500; // ~25,000 kamerstukken max
 // These ~10K documents are the actual travaux préparatoires.
 const SRU_QUERIES = [
   { label: 'Voorstel van wet', query: 'type=Kamerstuk AND subrubriek="Voorstel van wet"' },
-  { label: 'Memorie van toelichting', query: 'type=Kamerstuk AND subrubriek="Memorie van toelichting"' },
+  {
+    label: 'Memorie van toelichting',
+    query: 'type=Kamerstuk AND subrubriek="Memorie van toelichting"',
+  },
   { label: 'Nota van wijziging', query: 'type=Kamerstuk AND subrubriek="Nota van wijziging"' },
-  { label: 'Nota nav verslag', query: 'type=Kamerstuk AND subrubriek="Nota naar aanleiding van het verslag"' },
-  { label: 'Advies Raad van State', query: 'type=Kamerstuk AND subrubriek="Advies Raad van State en Nader rapport"' },
+  {
+    label: 'Nota nav verslag',
+    query: 'type=Kamerstuk AND subrubriek="Nota naar aanleiding van het verslag"',
+  },
+  {
+    label: 'Advies Raad van State',
+    query: 'type=Kamerstuk AND subrubriek="Advies Raad van State en Nader rapport"',
+  },
   { label: 'Verslag', query: 'type=Kamerstuk AND subrubriek="Verslag"' },
 ];
 
@@ -50,14 +59,14 @@ const DOCUMENT_TYPE_MAP: Record<string, string> = {
   'memorie van toelichting': 'memorie_van_toelichting',
   'nota naar aanleiding van het verslag': 'nota_nav_verslag',
   'nota van wijziging': 'nota_van_wijziging',
-  'amendement': 'amendement',
+  amendement: 'amendement',
   'advies raad van state': 'advies_raad_van_state',
   'voorstel van wet': 'voorstel_van_wet',
   'tweede nota van wijziging': 'tweede_nota_van_wijziging',
-  'brief': 'brief',
-  'verslag': 'verslag',
-  'eindverslag': 'eindverslag',
-  'motie': 'motie',
+  brief: 'brief',
+  verslag: 'verslag',
+  eindverslag: 'eindverslag',
+  motie: 'motie',
 };
 
 // ---------------------------------------------------------------------------
@@ -113,7 +122,7 @@ function extractBwbIds(text: string): string[] {
 async function fetchBwbRefsFromDocument(url: string): Promise<string[]> {
   try {
     const response = await fetch(url, {
-      headers: { 'Accept': 'text/html' },
+      headers: { Accept: 'text/html' },
       signal: AbortSignal.timeout(10000),
     });
     if (!response.ok) return [];
@@ -135,11 +144,7 @@ function normalizeDocumentType(typeText: string): string {
 /**
  * Parse kamerstuk reference (e.g., "35073-3" or "35 073, nr. 3").
  */
-function parseKamerstukRef(
-  dossiernummer: string,
-  ondernummer: string,
-  year?: string,
-): string {
+function parseKamerstukRef(dossiernummer: string, ondernummer: string, year?: string): string {
   if (!dossiernummer) return '';
 
   // Clean up dossiernummer (remove spaces, leading zeros)
@@ -160,7 +165,10 @@ function parseKamerstukRef(
 /**
  * Fetch a single page from the SRU service and return kamerstuk records.
  */
-async function fetchSRUPage(sruQuery: string, startRecord: number): Promise<{
+async function fetchSRUPage(
+  sruQuery: string,
+  startRecord: number,
+): Promise<{
   records: KamerstukRecord[];
   totalRecords: number;
   nextRecordPosition: number | null;
@@ -187,7 +195,9 @@ async function fetchSRUPage(sruQuery: string, startRecord: number): Promise<{
   });
 
   const doc = parser.parse(xml) as Record<string, unknown>;
-  const searchRetrieveResponse = doc['searchRetrieveResponse'] as Record<string, unknown> | undefined;
+  const searchRetrieveResponse = doc['searchRetrieveResponse'] as
+    | Record<string, unknown>
+    | undefined;
 
   if (!searchRetrieveResponse) {
     return { records: [], totalRecords: 0, nextRecordPosition: null };
@@ -202,7 +212,7 @@ async function fetchSRUPage(sruQuery: string, startRecord: number): Promise<{
     return { records: [], totalRecords, nextRecordPosition: null };
   }
 
-  const rawRecords = toArray((recordsContainer as Record<string, unknown>)['record']);
+  const rawRecords = toArray(recordsContainer['record']);
   const records: KamerstukRecord[] = [];
 
   for (const rawRecord of rawRecords) {
@@ -225,23 +235,23 @@ async function fetchSRUPage(sruQuery: string, startRecord: number): Promise<{
     if (!owmsKern || typeof owmsKern !== 'object') continue;
 
     // Extract identifier
-    const identifierNode = (owmsKern as Record<string, unknown>)['identifier'];
+    const identifierNode = owmsKern['identifier'];
     const identifier = extractText(identifierNode);
 
     // Skip if no identifier
     if (!identifier) continue;
 
     // Extract title
-    const titleNode = (owmsKern as Record<string, unknown>)['title'];
+    const titleNode = owmsKern['title'];
     const title = extractText(titleNode);
 
     // Extract date from owmsmantel (issued) or owmskern (modified)
     const owmsMantel = meta['owmsmantel'] as Record<string, unknown> | undefined;
-    const dateNode = owmsMantel?.['issued'] ?? (owmsKern as Record<string, unknown>)['modified'];
+    const dateNode = owmsMantel?.['issued'] ?? owmsKern['modified'];
     const date = extractText(dateNode).substring(0, 10);
 
     // Extract description/summary from owmskern
-    const descNode = (owmsKern as Record<string, unknown>)['description'] ?? (owmsKern as Record<string, unknown>)['abstract'];
+    const descNode = owmsKern['description'] ?? owmsKern['abstract'];
     const summary = extractText(descNode);
 
     // Extract dossiernummer, ondernummer, and document type from opmeta
@@ -274,13 +284,14 @@ async function fetchSRUPage(sruQuery: string, startRecord: number): Promise<{
     const kamerstukRef = parseKamerstukRef(dossiernummer, ondernummer, year);
 
     // Look for BWB references in summary, description, and related metadata
-    const allText = `${summary} ${title} ${extractText((owmsKern as Record<string, unknown>)['subject'])}`;
+    const allText = `${summary} ${title} ${extractText(owmsKern['subject'])}`;
     const relatedBwbIds = extractBwbIds(allText);
 
     // Build URL from enrichedData or construct from identifier
     const enrichedData = gzd['enrichedData'] as Record<string, unknown> | undefined;
     const enrichedUrl = enrichedData?.['url'] as string | undefined;
-    const url = enrichedUrl ||
+    const url =
+      enrichedUrl ||
       (identifier.startsWith('http')
         ? identifier
         : `https://zoek.officielebekendmakingen.nl/${identifier.replace(/^.*\//, '')}.html`);
@@ -342,7 +353,9 @@ function writeKamerstukSeed(records: KamerstukRecord[], batchIndex: number): voi
   const fileName = `kamerstuk-batch-${String(batchIndex).padStart(4, '0')}.json`;
   const filePath = path.join(SEED_DIR, fileName);
   fs.writeFileSync(filePath, JSON.stringify(seedData, null, 2), 'utf-8');
-  console.log(`  Wrote ${fileName} (${records.length} kamerstukken, ${preparatoryWorks.length} links to BWB)`);
+  console.log(
+    `  Wrote ${fileName} (${records.length} kamerstukken, ${preparatoryWorks.length} links to BWB)`,
+  );
 }
 
 /**
@@ -378,7 +391,6 @@ async function main(): Promise<void> {
     let totalRecords = 0;
     let consecutiveErrors = 0;
 
-    // eslint-disable-next-line no-constant-condition
     while (true) {
       // Check if batch already exists
       if (batchFileExists(batchIndex)) {
@@ -400,7 +412,9 @@ async function main(): Promise<void> {
           page = await fetchSRUPage(query, startRecord);
           if (page.records.length > 0) break;
         } catch (err) {
-          console.warn(`  WARNING: SRU error at record ${startRecord} (attempt ${attempt + 1}): ${err}`);
+          console.warn(
+            `  WARNING: SRU error at record ${startRecord} (attempt ${attempt + 1}): ${String(err)}`,
+          );
         }
         await sleep(RATE_LIMIT_MS * 2);
       }
@@ -418,7 +432,9 @@ async function main(): Promise<void> {
       consecutiveErrors = 0;
       totalRecords = page.totalRecords || totalRecords;
 
-      console.log(`  [${label}] Found ${page.records.length} kamerstukken (${startRecord} / ${totalRecords})`);
+      console.log(
+        `  [${label}] Found ${page.records.length} kamerstukken (${startRecord} / ${totalRecords})`,
+      );
 
       // Enrich with BWB references from actual document HTML
       for (const record of page.records) {

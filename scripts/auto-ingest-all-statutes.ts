@@ -66,9 +66,7 @@ function parseArgs(): {
   const args = process.argv.slice(2);
 
   const force = args.includes('--force');
-  const limit = args.includes('--limit')
-    ? parseInt(args[args.indexOf('--limit') + 1], 10)
-    : null;
+  const limit = args.includes('--limit') ? parseInt(args[args.indexOf('--limit') + 1], 10) : null;
 
   let type: DocumentType | null = null;
   if (args.includes('--type')) {
@@ -112,7 +110,10 @@ interface SRURecord {
 /**
  * Fetch a single page from the SRU service and return records + next position.
  */
-async function fetchSRUPage(query: string, startRecord: number): Promise<{
+async function fetchSRUPage(
+  query: string,
+  startRecord: number,
+): Promise<{
   records: SRURecord[];
   totalRecords: number;
   nextRecordPosition: number | null;
@@ -138,7 +139,9 @@ async function fetchSRUPage(query: string, startRecord: number): Promise<{
   });
 
   const doc = parser.parse(xml) as Record<string, unknown>;
-  const searchRetrieveResponse = doc['searchRetrieveResponse'] as Record<string, unknown> | undefined;
+  const searchRetrieveResponse = doc['searchRetrieveResponse'] as
+    | Record<string, unknown>
+    | undefined;
 
   if (!searchRetrieveResponse) {
     return { records: [], totalRecords: 0, nextRecordPosition: null };
@@ -153,7 +156,7 @@ async function fetchSRUPage(query: string, startRecord: number): Promise<{
     return { records: [], totalRecords, nextRecordPosition: null };
   }
 
-  const rawRecords = toArray((recordsContainer as Record<string, unknown>)['record']);
+  const rawRecords = toArray(recordsContainer['record']);
   const records: SRURecord[] = [];
 
   for (const rawRecord of rawRecords) {
@@ -173,7 +176,9 @@ async function fetchSRUPage(query: string, startRecord: number): Promise<{
 
     if (originalData) {
       const meta = originalData['meta'] as Record<string, unknown> | undefined;
-      const owmsKern = (meta?.['owmskern'] ?? originalData['owmskern'] ?? originalData['owms-kern']) as Record<string, unknown> | undefined;
+      const owmsKern = (meta?.['owmskern'] ??
+        originalData['owmskern'] ??
+        originalData['owms-kern']) as Record<string, unknown> | undefined;
 
       if (owmsKern) {
         const identifier = owmsKern['identifier'];
@@ -181,7 +186,8 @@ async function fetchSRUPage(query: string, startRecord: number): Promise<{
           const match = identifier.match(/BWB[RV]\d+/);
           if (match) bwbId = match[0];
         } else if (identifier && typeof identifier === 'object') {
-          const idStr = String((identifier as Record<string, unknown>)['#text'] ?? '');
+          const idText = (identifier as Record<string, unknown>)['#text'];
+          const idStr = typeof idText === 'string' ? idText : '';
           const match = idStr.match(/BWB[RV]\d+/);
           if (match) bwbId = match[0];
         }
@@ -190,7 +196,8 @@ async function fetchSRUPage(query: string, startRecord: number): Promise<{
         if (typeof titleNode === 'string') {
           title = titleNode;
         } else if (titleNode && typeof titleNode === 'object') {
-          title = String((titleNode as Record<string, unknown>)['#text'] ?? '');
+          const titleText = (titleNode as Record<string, unknown>)['#text'];
+          title = typeof titleText === 'string' ? titleText : '';
         }
       }
     }
@@ -219,7 +226,10 @@ async function fetchSRUPage(query: string, startRecord: number): Promise<{
 /**
  * Fetch the toestand XML for a BWB-ID and parse it into provisions.
  */
-async function fetchAndParseBWB(bwbId: string, toestandUrl?: string): Promise<{
+async function fetchAndParseBWB(
+  bwbId: string,
+  toestandUrl?: string,
+): Promise<{
   title: string;
   provisions: Array<{
     provision_ref: string;
@@ -257,15 +267,19 @@ async function fetchAndParseBWB(bwbId: string, toestandUrl?: string): Promise<{
 /**
  * Write a seed JSON file for a single statute.
  */
-function writeSeedFile(bwbId: string, title: string, provisions: Array<{
-  provision_ref: string;
-  book?: string;
-  chapter?: string;
-  section?: string;
-  article: string;
-  title?: string;
-  content: string;
-}>): void {
+function writeSeedFile(
+  bwbId: string,
+  title: string,
+  provisions: Array<{
+    provision_ref: string;
+    book?: string;
+    chapter?: string;
+    section?: string;
+    article: string;
+    title?: string;
+    content: string;
+  }>,
+): void {
   const seedData = {
     documents: [
       {
@@ -356,7 +370,6 @@ async function main(): Promise<void> {
     let fetchedCount = 0;
     let consecutiveEmpty = 0;
 
-    // eslint-disable-next-line no-constant-condition
     while (true) {
       let page: Awaited<ReturnType<typeof fetchSRUPage>> | null = null;
 
@@ -366,7 +379,9 @@ async function main(): Promise<void> {
           break;
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          console.log(`    WARN: Page at record ${startRecord} failed (attempt ${retry + 1}): ${msg}`);
+          console.log(
+            `    WARN: Page at record ${startRecord} failed (attempt ${retry + 1}): ${msg}`,
+          );
           if (retry < MAX_RETRIES - 1) await sleep(RATE_LIMIT_MS * 2);
         }
       }
@@ -449,14 +464,14 @@ async function main(): Promise<void> {
     // Skip if seed file already exists (unless --force)
     if (!force && fs.existsSync(seedPath)) {
       console.log(
-        `  [${processed}/${recordsToProcess.length}] ${percentage}% | ${record.bwbId} — exists, skipping | ETA: ${eta}`
+        `  [${processed}/${recordsToProcess.length}] ${percentage}% | ${record.bwbId} — exists, skipping | ETA: ${eta}`,
       );
       skippedCount++;
       continue;
     }
 
     console.log(
-      `  [${processed}/${recordsToProcess.length}] ${percentage}% | ${record.bwbId} — fetching... | ETA: ${eta}`
+      `  [${processed}/${recordsToProcess.length}] ${percentage}% | ${record.bwbId} — fetching... | ETA: ${eta}`,
     );
 
     let result: Awaited<ReturnType<typeof fetchAndParseBWB>> = null;

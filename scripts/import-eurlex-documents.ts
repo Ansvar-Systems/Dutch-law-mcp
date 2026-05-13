@@ -131,7 +131,10 @@ function readBWBSeedFile(filePath: string): BWBSeedFile | null {
     const data = JSON.parse(content) as BWBSeedFile;
     return data;
   } catch (error) {
-    console.error(`  Error reading ${path.basename(filePath)}:`, error instanceof Error ? error.message : String(error));
+    console.error(
+      `  Error reading ${path.basename(filePath)}:`,
+      error instanceof Error ? error.message : String(error),
+    );
     return null;
   }
 }
@@ -141,6 +144,7 @@ function readBWBSeedFile(filePath: string): BWBSeedFile | null {
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
+  await Promise.resolve();
   console.log('=== EUR-Lex Document Importer ===');
   console.log();
 
@@ -220,9 +224,10 @@ async function main(): Promise<void> {
 
         // Find match position for context extraction
         const matchIndex = provision.content.indexOf(ref.raw_match);
-        const context = matchIndex >= 0
-          ? extractContext(provision.content, matchIndex)
-          : provision.content.slice(0, 100);
+        const context =
+          matchIndex >= 0
+            ? extractContext(provision.content, matchIndex)
+            : provision.content.slice(0, 100);
 
         // Create EU reference
         euReferences.push({
