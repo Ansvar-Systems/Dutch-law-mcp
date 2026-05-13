@@ -148,10 +148,14 @@ async function main(): Promise<void> {
   console.log('=== EUR-Lex Document Importer ===');
   console.log();
 
-  // Ensure seed directory exists
+  // Seed directory only exists after the BWB ingestion step has run. In CI
+  // we may run build:db without ingestion (PR validation just exercises the
+  // build pipeline); treat missing seed as "nothing to do" rather than
+  // a hard failure so unrelated PRs don't trip on it.
   if (!fs.existsSync(SEED_DIR)) {
-    console.error(`Error: Seed directory does not exist: ${SEED_DIR}`);
-    process.exit(1);
+    console.log(`Seed directory does not exist: ${SEED_DIR}`);
+    console.log('Skipping EU-reference extraction (no BWB seeds to scan).');
+    return;
   }
 
   // Find all BWB seed files

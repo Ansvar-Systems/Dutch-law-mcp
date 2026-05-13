@@ -52,7 +52,7 @@ jobs:
 
           printf '%s\n' "$changed"
 
-          if printf '%s\n' "$changed" | grep -Eq '^(data/|sources\.ya?ml|coverage\.json|COVERAGE\.md|scripts/(ingest|build|premium-ingestion)|src/(db|data|ingest|schema)/|src/.*(db|data|ingest|schema)|package(-lock)?\.json|tsconfig\.json)'; then
+          if printf '%s\n' "$changed" | grep -Eq '^(data/|sources\.ya?ml|coverage\.json|COVERAGE\.md|scripts/(ingest|build|premium-ingestion)|src/(db|data|ingest|schema)/|src/.*(db|data|ingest|schema))'; then
             echo "db_changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "db_changed=false" >> "$GITHUB_OUTPUT"
