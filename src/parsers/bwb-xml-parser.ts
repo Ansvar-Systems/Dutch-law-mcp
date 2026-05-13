@@ -11,6 +11,12 @@ function attrToString(val: unknown): string {
 export interface ParsedStatute {
   bwb_id: string;
   title: string;
+  /**
+   * ISO-8601 in-force date from the BWB `toestand@inwerkingtreding` attribute
+   * (e.g. "2018-05-25"). Undefined for legacy/test fixtures that don't include
+   * the `<toestand>` wrapper.
+   */
+  in_force_date?: string;
   provisions: ParsedProvision[];
 }
 
@@ -283,10 +289,19 @@ export function parseBwbXml(xml: string): ParsedStatute {
 
   let wetgeving: Record<string, unknown> | undefined;
   let bwbId = '';
+  let inForceDate: string | undefined;
 
   if (toestand) {
     // Real toestand XML: toestand > wetgeving
     bwbId = attrToString(toestand['@_bwb-id']);
+    // The toestand root carries an `inwerkingtreding="YYYY-MM-DD"` attribute
+    // recording when this versioned text became in force. Capture it so the
+    // ingest pipeline can populate legal_documents.in_force_date — the source
+    // of effective_date in citation envelopes (see get-provision.ts:59,81,121).
+    const rawDate = attrToString(toestand['@_inwerkingtreding']).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+      inForceDate = rawDate;
+    }
     wetgeving = toestand['wetgeving'] as Record<string, unknown> | undefined;
   } else {
     // Legacy/test format: wet-besluit > wetgeving
@@ -298,7 +313,7 @@ export function parseBwbXml(xml: string): ParsedStatute {
   }
 
   if (!wetgeving) {
-    return { bwb_id: bwbId, title: '', provisions: [] };
+    return { bwb_id: bwbId, title: '', in_force_date: inForceDate, provisions: [] };
   }
 
   // Extract BWB-ID (may be on wetgeving if not on toestand)
@@ -327,12 +342,12 @@ export function parseBwbXml(xml: string): ParsedStatute {
     wetgeving['regeling-tekst'];
 
   if (!contentRoot || typeof contentRoot !== 'object') {
-    return { bwb_id: bwbId, title, provisions: [] };
+    return { bwb_id: bwbId, title, in_force_date: inForceDate, provisions: [] };
   }
 
   // Collect all provisions by traversing the hierarchy
   const provisions: ParsedProvision[] = [];
   collectArtikels(contentRoot as Record<string, unknown>, {}, provisions);
 
-  return { bwb_id: bwbId, title, provisions };
+  return { bwb_id: bwbId, title, in_force_date: inForceDate, provisions };
 }
