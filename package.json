@@ -63,7 +63,7 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.15.29",
     "@vitest/coverage-v8": "^4.0.18",
-    "eslint": "^9.27.0",
+    "eslint": "^10.3.0",
     "fast-xml-parser": "^5.3.5",
     "husky": "^9.1.7",
     "lint-staged": "^16.1.0",
