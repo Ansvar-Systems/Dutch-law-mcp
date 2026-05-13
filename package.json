@@ -26,7 +26,7 @@
     "test:contract": "vitest run --config vitest.contract.config.ts",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "download:db": "bash scripts/download-db.sh",
+    "download:db": "sh scripts/download-db.sh",
     "drift:detect": "tsx scripts/drift-detect.ts",
     "validate": "npm run lint && npm test && npm run test:contract",
     "ingest": "tsx scripts/ingest-bwb.ts",
