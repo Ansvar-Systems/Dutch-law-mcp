@@ -122,7 +122,7 @@ function parseCelex(celex: string): {
   // Extract document type letter
   let typePos = 5;
   let type: 'directive' | 'regulation' | 'decision' | null = null;
-  let community = 'EU';
+  const community = 'EU';
 
   // Check for community code
   if (celex.length > 5) {
@@ -188,7 +188,7 @@ async function querySparql(query: string): Promise<SparqlResponse | null> {
     console.log(`  Querying EUR-Lex SPARQL endpoint...`);
     const response = await fetch(url.toString(), {
       headers: {
-        'Accept': 'application/sparql-results+json',
+        Accept: 'application/sparql-results+json',
         'User-Agent': 'Dutch-law-mcp-fetcher/1.0',
       },
     });
@@ -198,10 +198,10 @@ async function querySparql(query: string): Promise<SparqlResponse | null> {
       return null;
     }
 
-    const data = await response.json() as SparqlResponse;
+    const data = (await response.json()) as SparqlResponse;
     return data;
   } catch (err) {
-    console.error(`  ERROR: Failed to query SPARQL endpoint: ${err}`);
+    console.error(`  ERROR: Failed to query SPARQL endpoint: ${String(err)}`);
     return null;
   }
 }
@@ -401,4 +401,4 @@ async function main(): Promise<void> {
   }
 }
 
-main();
+void main();

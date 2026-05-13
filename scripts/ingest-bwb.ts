@@ -86,7 +86,9 @@ async function fetchSRUPage(startRecord: number): Promise<{
   });
 
   const doc = parser.parse(xml) as Record<string, unknown>;
-  const searchRetrieveResponse = doc['searchRetrieveResponse'] as Record<string, unknown> | undefined;
+  const searchRetrieveResponse = doc['searchRetrieveResponse'] as
+    | Record<string, unknown>
+    | undefined;
 
   if (!searchRetrieveResponse) {
     return { records: [], totalRecords: 0, nextRecordPosition: null };
@@ -101,7 +103,7 @@ async function fetchSRUPage(startRecord: number): Promise<{
     return { records: [], totalRecords, nextRecordPosition: null };
   }
 
-  const rawRecords = toArray((recordsContainer as Record<string, unknown>)['record']);
+  const rawRecords = toArray(recordsContainer['record']);
   const records: SRURecord[] = [];
 
   for (const rawRecord of rawRecords) {
@@ -124,7 +126,9 @@ async function fetchSRUPage(startRecord: number): Promise<{
     if (originalData) {
       // The SRU response wraps owmskern inside overheidbwb:meta (becomes 'meta' after NS removal)
       const meta = originalData['meta'] as Record<string, unknown> | undefined;
-      const owmsKern = (meta?.['owmskern'] ?? originalData['owmskern'] ?? originalData['owms-kern']) as Record<string, unknown> | undefined;
+      const owmsKern = (meta?.['owmskern'] ??
+        originalData['owmskern'] ??
+        originalData['owms-kern']) as Record<string, unknown> | undefined;
 
       if (owmsKern) {
         const identifier = owmsKern['identifier'];
@@ -132,7 +136,8 @@ async function fetchSRUPage(startRecord: number): Promise<{
           const match = identifier.match(/BWB[RV]\d+/);
           if (match) bwbId = match[0];
         } else if (identifier && typeof identifier === 'object') {
-          const idStr = String((identifier as Record<string, unknown>)['#text'] ?? '');
+          const idText = (identifier as Record<string, unknown>)['#text'];
+          const idStr = typeof idText === 'string' ? idText : '';
           const match = idStr.match(/BWB[RV]\d+/);
           if (match) bwbId = match[0];
         }
@@ -141,7 +146,8 @@ async function fetchSRUPage(startRecord: number): Promise<{
         if (typeof titleNode === 'string') {
           title = titleNode;
         } else if (titleNode && typeof titleNode === 'object') {
-          title = String((titleNode as Record<string, unknown>)['#text'] ?? '');
+          const titleText = (titleNode as Record<string, unknown>)['#text'];
+          title = typeof titleText === 'string' ? titleText : '';
         }
       }
     }
@@ -174,7 +180,10 @@ async function fetchSRUPage(startRecord: number): Promise<{
  * If a toestandUrl is provided (from SRU enrichedData), use that directly.
  * Otherwise, fall back to the generic URL pattern.
  */
-async function fetchAndParseBWB(bwbId: string, toestandUrl?: string): Promise<{
+async function fetchAndParseBWB(
+  bwbId: string,
+  toestandUrl?: string,
+): Promise<{
   title: string;
   provisions: Array<{
     provision_ref: string;
@@ -203,7 +212,7 @@ async function fetchAndParseBWB(bwbId: string, toestandUrl?: string): Promise<{
       provisions: parsed.provisions,
     };
   } catch (err) {
-    console.warn(`  WARNING: Error parsing ${bwbId}: ${err}`);
+    console.warn(`  WARNING: Error parsing ${bwbId}: ${String(err)}`);
     return null;
   }
 }
@@ -211,15 +220,19 @@ async function fetchAndParseBWB(bwbId: string, toestandUrl?: string): Promise<{
 /**
  * Write a seed JSON file for a single statute.
  */
-function writeSeedFile(bwbId: string, title: string, provisions: Array<{
-  provision_ref: string;
-  book?: string;
-  chapter?: string;
-  section?: string;
-  article: string;
-  title?: string;
-  content: string;
-}>): void {
+function writeSeedFile(
+  bwbId: string,
+  title: string,
+  provisions: Array<{
+    provision_ref: string;
+    book?: string;
+    chapter?: string;
+    section?: string;
+    article: string;
+    title?: string;
+    content: string;
+  }>,
+): void {
   const seedData = {
     documents: [
       {
@@ -265,7 +278,6 @@ async function main(): Promise<void> {
   let startRecord = 1;
   let totalRecords = 0;
 
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const page = await fetchSRUPage(startRecord);
     totalRecords = page.totalRecords;
@@ -305,7 +317,9 @@ async function main(): Promise<void> {
 
     // Skip if seed file already exists
     if (fs.existsSync(seedPath)) {
-      console.log(`  [${i + 1}/${uniqueRecords.length}] ${record.bwbId} — already exists, skipping`);
+      console.log(
+        `  [${i + 1}/${uniqueRecords.length}] ${record.bwbId} — already exists, skipping`,
+      );
       successCount++;
       continue;
     }

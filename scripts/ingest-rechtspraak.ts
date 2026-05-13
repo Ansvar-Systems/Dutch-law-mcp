@@ -89,7 +89,8 @@ function inferLegalDomain(subject: string, procedureType: string): string {
   if (text.includes('straf') || text.includes('penal')) return 'Strafrecht';
   if (text.includes('bestuur') || text.includes('bestuurs')) return 'Bestuursrecht';
   if (text.includes('belasting') || text.includes('fiscal')) return 'Belastingrecht';
-  if (text.includes('civiel') || text.includes('verbintenis') || text.includes('handels')) return 'Civiel recht';
+  if (text.includes('civiel') || text.includes('verbintenis') || text.includes('handels'))
+    return 'Civiel recht';
   if (text.includes('familie') || text.includes('personen')) return 'Personen- en familierecht';
   if (text.includes('arbeids') || text.includes('sociaal')) return 'Arbeidsrecht';
   return '';
@@ -270,7 +271,6 @@ async function main(): Promise<void> {
   let batchIndex = 0;
   let totalDecisions = 0;
 
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const { decisions, hasMore } = await fetchDecisions(offset);
 

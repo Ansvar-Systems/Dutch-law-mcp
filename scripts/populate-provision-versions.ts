@@ -74,7 +74,9 @@ async function fetchWithRetry(url: string, retries = MAX_RETRIES): Promise<Respo
       if (response.ok) return response;
       // Treat server errors (5xx) as retryable
       if (response.status >= 500 && attempt < retries) {
-        console.warn(`    Attempt ${attempt}/${retries} failed with ${response.status}, retrying...`);
+        console.warn(
+          `    Attempt ${attempt}/${retries} failed with ${response.status}, retrying...`,
+        );
         await sleep(1000 * attempt);
         continue;
       }
@@ -122,7 +124,9 @@ async function discoverVersions(bwbId: string): Promise<VersionRecord[]> {
   });
 
   const doc = parser.parse(xml) as Record<string, unknown>;
-  const searchRetrieveResponse = doc['searchRetrieveResponse'] as Record<string, unknown> | undefined;
+  const searchRetrieveResponse = doc['searchRetrieveResponse'] as
+    | Record<string, unknown>
+    | undefined;
 
   if (!searchRetrieveResponse) {
     return [];
@@ -133,7 +137,7 @@ async function discoverVersions(bwbId: string): Promise<VersionRecord[]> {
     return [];
   }
 
-  const rawRecords = toArray((recordsContainer as Record<string, unknown>)['record']);
+  const rawRecords = toArray(recordsContainer['record']);
   const versions: VersionRecord[] = [];
 
   for (const rawRecord of rawRecords) {
@@ -291,7 +295,7 @@ async function main(): Promise<void> {
     try {
       versions = await discoverVersions(statute.id);
     } catch (err) {
-      console.error(`  ERROR discovering versions: ${err}`);
+      console.error(`  ERROR discovering versions: ${String(err)}`);
       totalErrors++;
       continue;
     }
@@ -335,7 +339,7 @@ async function main(): Promise<void> {
         const response = await fetchWithRetry(version.toestandUrl);
         xml = await response.text();
       } catch (err) {
-        console.error(`    ERROR fetching toestand XML: ${err}`);
+        console.error(`    ERROR fetching toestand XML: ${String(err)}`);
         totalErrors++;
         continue;
       }
@@ -344,7 +348,7 @@ async function main(): Promise<void> {
       try {
         parsed = parseBwbXml(xml);
       } catch (err) {
-        console.error(`    ERROR parsing toestand XML: ${err}`);
+        console.error(`    ERROR parsing toestand XML: ${String(err)}`);
         totalErrors++;
         continue;
       }

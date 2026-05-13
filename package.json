@@ -46,7 +46,13 @@
     "format:check": "prettier --check .",
     "prepare": "node -e \"try{require('husky')}catch(e){process.exit(0)}\" && husky || true",
     "prepublishOnly": "npm run build",
-    "postinstall": "node -e \"const fs=require('fs');const cp=require('child_process');if(!fs.existsSync('dist')){try{cp.execFileSync(process.platform==='win32'?'npm.cmd':'npm',['run','build'],{stdio:'inherit'})}catch{}}\""
+    "postinstall": "node -e \"const fs=require('fs');const cp=require('child_process');if(!fs.existsSync('dist')){try{cp.execFileSync(process.platform==='win32'?'npm.cmd':'npm',['run','build'],{stdio:'inherit'})}catch{}}\"",
+    "ingest:fetch": "tsx scripts/ingest-fetch.ts",
+    "ingest:diff": "tsx scripts/ingest-diff.ts",
+    "coverage:update": "tsx scripts/update-coverage.ts",
+    "freshness:check": "tsx scripts/check-freshness.ts",
+    "coverage:verify": "tsx scripts/verify-coverage.ts",
+    "ingest:full": "npm run ingest:fetch && npm run build:db && npm run coverage:update"
   },
   "dependencies": {
     "@ansvar/mcp-sqlite": "^1.0.0",

@@ -1,42 +1,50 @@
-name: Check for Legal Data Updates
-
+name: Freshness Check
 on:
   schedule:
-    - cron: '0 6 * * 5' # Weekly at 06:00 UTC
+    - cron: '0 8 * * 1' # Weekly, Monday 08:00 UTC
   workflow_dispatch:
 
-permissions:
-  contents: read
-  issues: write
-
 jobs:
-  check-updates:
+  check:
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'npm'
+
       - run: npm ci
-      - run: npm run build
-      - name: Check for updates
-        id: check
+
+      - name: Check freshness
+        id: freshness
         run: |
-          npm run check-updates 2>&1 | tee update-report.txt
-          echo "exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
-        continue-on-error: true
-      - name: Create issue if updates available
-        if: steps.check.outputs.exit_code == '2'
+          npm run freshness:check
+          echo "stale=$(cat .freshness-stale)" >> $GITHUB_OUTPUT
+
+      - name: Create issue if stale
+        if: steps.freshness.outputs.stale == 'true'
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            const report = fs.readFileSync('update-report.txt', 'utf8');
-            await github.rest.issues.create({
+            const summary = fs.readFileSync('.freshness-report', 'utf8');
+            const existing = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `[Auto] Legal data updates available - ${new Date().toISOString().split('T')[0]}`,
-              body: `## Legal Data Update Report\n\n\`\`\`\n${report}\n\`\`\`\n\nRun \`npm run ingest\` to update the data.\n\n_This issue was created automatically by the check-updates workflow._`,
-              labels: ['data-update', 'automated']
+              labels: 'data-freshness',
+              state: 'open'
             });
+            if (existing.data.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `Data staleness alert - ${new Date().toISOString().split('T')[0]}`,
+                body: summary,
+                labels: ['data-freshness', 'automated']
+              });
+            }

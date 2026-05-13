@@ -32,12 +32,7 @@ const BW_BOOK_TO_BWB: Record<number, string> = {
 };
 
 // All possible BW BWB-IDs (used when we can't determine the book)
-const BW_BWB_IDS = [
-  'BWBR0005289',
-  'BWBR0005290',
-  'BWBR0005291',
-  'BWBR0003045',
-];
+const BW_BWB_IDS = ['BWBR0005289', 'BWBR0005290', 'BWBR0005291', 'BWBR0003045'];
 
 // Short name -> BWB-ID mapping for non-BW statutes
 const SHORT_NAME_TO_BWB: Record<string, string> = {
@@ -54,6 +49,7 @@ const SHORT_NAME_TO_BWB: Record<string, string> = {
 // Main
 // ---------------------------------------------------------------------------
 async function main() {
+  await Promise.resolve();
   const dbPath = join(__dirname, '..', 'data', 'database.db');
   const db = new Database(dbPath);
 
@@ -66,9 +62,9 @@ async function main() {
   console.log(`Loaded ${knownDocs.size} known legal documents.`);
 
   // Read all provisions
-  const provisions = db.prepare(
-    'SELECT id, document_id, provision_ref, content FROM legal_provisions',
-  ).all() as Array<{
+  const provisions = db
+    .prepare('SELECT id, document_id, provision_ref, content FROM legal_provisions')
+    .all() as Array<{
     id: number;
     document_id: string;
     provision_ref: string;
@@ -105,7 +101,10 @@ async function main() {
 
         for (const targetDocId of targetDocIds) {
           // Skip trivial self-references (same doc, same provision)
-          if (targetDocId === provision.document_id && ref.target_provision_ref === provision.provision_ref) {
+          if (
+            targetDocId === provision.document_id &&
+            ref.target_provision_ref === provision.provision_ref
+          ) {
             continue;
           }
           insertStmt.run(
@@ -121,7 +120,9 @@ async function main() {
 
       // Progress reporting every 1000 provisions
       if ((i + 1) % 1000 === 0) {
-        console.log(`  Processed ${i + 1} / ${provisions.length} provisions (${totalRefs} refs so far)...`);
+        console.log(
+          `  Processed ${i + 1} / ${provisions.length} provisions (${totalRefs} refs so far)...`,
+        );
       }
     }
   });
@@ -189,10 +190,7 @@ function resolveTargetDocumentIds(
   return [];
 }
 
-function resolveBwReference(
-  ref: ExtractedRef,
-  knownDocs: Set<string>,
-): string[] {
+function resolveBwReference(ref: ExtractedRef, knownDocs: Set<string>): string[] {
   // Attempt to extract book number from provision_ref (e.g. "6:162" -> book 6)
   if (ref.target_provision_ref) {
     const bookMatch = ref.target_provision_ref.match(/^(\d+):/);

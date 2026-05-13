@@ -23,7 +23,8 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const DB_PATH = process.env.DUTCH_LAW_DB_PATH ?? path.resolve(__dirname, '..', 'data', 'database.db');
+const DB_PATH =
+  process.env.DUTCH_LAW_DB_PATH ?? path.resolve(__dirname, '..', 'data', 'database.db');
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -67,7 +68,7 @@ async function checkRemoteLastModified(bwbId: string): Promise<string | null> {
     const lastModified = response.headers.get('Last-Modified');
     return lastModified;
   } catch (err) {
-    console.warn(`  WARNING: Failed to check ${bwbId}: ${err}`);
+    console.warn(`  WARNING: Failed to check ${bwbId}: ${String(err)}`);
     return null;
   }
 }
@@ -97,12 +98,14 @@ async function main(): Promise<void> {
 
   try {
     // Fetch all statutes from the database
-    const statutes = db.prepare<StatuteRecord, [string]>(
-      `SELECT id, title, last_updated
+    const statutes = db
+      .prepare<StatuteRecord, [string]>(
+        `SELECT id, title, last_updated
        FROM legal_documents
        WHERE type = ?
-       ORDER BY id`
-    ).all('statute');
+       ORDER BY id`,
+      )
+      .all('statute');
 
     console.log(`Checking ${statutes.length} statutes for updates...`);
     console.log();

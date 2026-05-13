@@ -1,108 +1,47 @@
-# syntax=docker/dockerfile:1
+# MCP Server — Hetzner / Kubernetes
+# Image contract: docs/superpowers/specs/2026-04-25-mcp-infrastructure-standard-design.md §3
+# Profile: node-wasm (runtime: @ansvar/mcp-sqlite WASM — no native runtime compile)
+# DB pattern: built (data/database.db)
+# Build-time native compile (better-sqlite3 in devDeps for build:db): False
 
-# ===================================
-# Stage 1: Builder
-# ===================================
-FROM node:24-alpine AS builder
+FROM node:20-alpine AS builder
 
-# Install build dependencies
-RUN apk add --no-cache python3 make g++
-
-WORKDIR /build
-
-# Copy dependency manifests
-COPY package*.json ./
-
-# Install all dependencies (including devDependencies for build)
-RUN npm ci
-
-# Copy source code and TypeScript configuration
-COPY src ./src
-COPY tsconfig.json ./
-
-# Build TypeScript to JavaScript
-RUN npm run build
-
-# ===================================
-# Stage 2: Production
-# ===================================
-FROM node:24-alpine AS production
-
-# Metadata labels (OCI standard)
-LABEL org.opencontainers.image.title="Dutch Law MCP Server"
-LABEL org.opencontainers.image.description="Production-grade Dutch legal research MCP server with comprehensive statute coverage and EU law cross-references"
-LABEL org.opencontainers.image.authors="Ansvar Systems AB <hello@ansvar.ai>"
-LABEL org.opencontainers.image.vendor="Ansvar Systems AB"
-LABEL org.opencontainers.image.source="https://github.com/Ansvar-Systems/Dutch-law-mcp"
-LABEL org.opencontainers.image.documentation="https://github.com/Ansvar-Systems/Dutch-law-mcp#readme"
-LABEL org.opencontainers.image.licenses="Apache-2.0"
-LABEL org.opencontainers.image.version="1.2.1"
-
-# Install curl/gzip for HTTP health checks and release DB download
-RUN apk add --no-cache curl gzip
-
-# Create non-root user for security
-RUN addgroup -g 1001 -S mcpserver && \
-    adduser -u 1001 -S mcpserver -G mcpserver
-
-# Set working directory
 WORKDIR /app
 
-# Set production environment
-ENV NODE_ENV=production
-ENV DUTCH_LAW_DB_PATH=/app/data/database.db
-# WASM SQLite loads the entire DB into memory — 64MB DB needs extra heap
-ENV NODE_OPTIONS="--max-old-space-size=512"
-
-# MODE controls the entry point: "stdio" (default) or "http"
-ENV MODE=stdio
-# PORT is only used when MODE=http
-ENV PORT=3000
-
-# Copy dependency manifests
 COPY package*.json ./
+RUN npm ci --ignore-scripts && npm cache clean --force
+COPY tsconfig.json ./
+COPY src/ ./src/
+COPY scripts/ ./scripts/
+RUN npm run build
+COPY data/ ./data/
+RUN if npm run 2>/dev/null | grep -q "build:db"; then npm run build:db; fi
 
-# Install production dependencies only
-RUN npm ci --omit=dev && \
-    npm cache clean --force
+FROM node:20-alpine AS runtime
 
-# Copy built artifacts from builder stage
-COPY --from=builder /build/dist ./dist
+WORKDIR /app
 
-# Fetch release database during image build so the image is query-ready
-COPY scripts/download-db.sh /app/scripts/download-db.sh
-RUN chmod +x /app/scripts/download-db.sh && sh /app/scripts/download-db.sh
-RUN node --input-type=module - <<'NODE'
-import Database from '@ansvar/mcp-sqlite';
-import { searchLegislation } from './dist/tools/search-legislation.js';
-const db = new Database('./data/database.db', { readonly: true });
-const tables = new Set(
-  db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(row => row.name)
-);
-for (const table of ['legal_documents', 'legal_provisions', 'provisions_fts']) {
-  if (!tables.has(table)) {
-    throw new Error(`Missing required table: ${table}`);
-  }
-}
-const result = await searchLegislation(db, { query: 'persoonsgegevens', limit: 1 });
-if (!result.results.length) {
-  throw new Error('Search smoke test returned no Dutch law results');
-}
-db.close();
-NODE
+RUN addgroup -g 1001 -S nodejs \
+ && adduser -u 1001 -S nodejs -G nodejs
 
-# Change ownership to non-root user
-RUN chown -R mcpserver:mcpserver /app
+COPY package*.json ./
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
-# Switch to non-root user
-USER mcpserver
+COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
+COPY --from=builder --chown=nodejs:nodejs /app/data ./data
 
-# Expose HTTP port (only relevant when MODE=http)
+# Ensure /app/data exists and is writable by the runtime user.
+# SQLite needs to write -wal/-shm sidecars in the DB directory.
+RUN mkdir -p /app/data && chown -R nodejs:nodejs /app/data
+
+USER nodejs
+
+ENV NODE_ENV=production \
+    PORT=3000
+
 EXPOSE 3000
 
-# Health check: use HTTP endpoint in HTTP mode, file check in stdio mode
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD if [ "$MODE" = "http" ]; then curl -f http://127.0.0.1:${PORT}/health || exit 1; else node -e "require('fs').accessSync('dist/index.js')" || exit 1; fi
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+  CMD node -e "fetch('http://localhost:3000/health').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"
 
-# Entry point: select mode via shell
-ENTRYPOINT ["sh", "-c", "if [ \"$MODE\" = \"http\" ]; then exec node dist/http-server.js; else exec node dist/index.js; fi"]
+CMD ["node", "dist/http-server.js"]
