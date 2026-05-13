@@ -106,3 +106,72 @@ data/*.db.lock
 data/ingest-failures.log
 *-e
 *.bak
+
+# === Standard MCP patterns (appended by apply-golden-standard.sh) ===
+# ═══════════════════════════════════════════════════════════════════════════
+# GIT IGNORE — MCP standard template (managed by apply-golden-standard.sh)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ───────────────────────────────────────────────────────────────────────────
+# NODE
+# ───────────────────────────────────────────────────────────────────────────
+node_modules/
+dist/
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ───────────────────────────────────────────────────────────────────────────
+# DATA — build artifacts, regenerated from upstream by `npm run ingest` + `npm run build:db`
+# ───────────────────────────────────────────────────────────────────────────
+
+# SQLite database (built at deploy time)
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+
+# Ingested seed JSONs (built by ingestion scripts; per source-attribution
+# standard, NO committed corpora — DB is built from upstream at deploy)
+data/seed/
+data/seed_paid/
+
+# Downloaded source archives (cache for re-runs of ingestion)
+data/cache/
+
+# Bulk download artifacts from upstream
+*.tgz
+*.tar.gz
+*.tar.bz2
+*.zip
+*.csv
+*.json.gz
+
+# Generated coverage / census artifacts (regenerated each build)
+data/census.json
+data/relevant-statutes.json
+data/validation-statutes.json
+data/eu-references-analysis.json
+
+# ───────────────────────────────────────────────────────────────────────────
+# ENVIRONMENT
+# ───────────────────────────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ───────────────────────────────────────────────────────────────────────────
+# IDE / TOOLING
+# ───────────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.bak
+
+# ───────────────────────────────────────────────────────────────────────────
+# CLAUDE / AGENT WORK
+# ───────────────────────────────────────────────────────────────────────────
+.claude/

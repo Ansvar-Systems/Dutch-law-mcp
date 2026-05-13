@@ -1,44 +1,28 @@
-name: Semgrep SAST
-
+name: Semgrep
 on:
-  push:
-    branches: ['**']
   pull_request:
-    branches: [main]
+    branches: [main, dev]
+    paths:
+      - 'src/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - '.github/workflows/semgrep.yml'
+  schedule:
+    - cron: '0 4 * * 1' # Weekly, Monday 04:00 UTC
   workflow_dispatch:
 
-permissions:
-  contents: read
-  security-events: write
-  actions: read
-
 jobs:
-  semgrep:
-    name: Semgrep security scan
+  scan:
     runs-on: ubuntu-latest
-
     container:
-      image: semgrep/semgrep:1.79
+      image: semgrep/semgrep
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Run Semgrep
-        run: |
-          semgrep scan \
-            --config p/security-audit \
-            --config p/secrets \
-            --config p/owasp-top-ten \
-            --config p/javascript \
-            --config p/typescript \
-            --sarif \
-            --output=semgrep.sarif \
-            --metrics=off
-
-      - name: Upload SARIF to GitHub Security
-        continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v4
-        if: always()
-        with:
-          sarif_file: semgrep.sarif
+        run: semgrep ci
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}

@@ -1,0 +1,230 @@
+# =============================================================================
+# Publish GHCR Image — Build, push, scan, and trigger prod deploy
+# =============================================================================
+#
+# Triggered on push to main when source, data, Dockerfile, or this workflow
+# itself changes. Builds and pushes to GHCR, runs Trivy image scan, then
+# kicks Watchtower's HTTP API on prod for near-instant deploy.
+#
+# Watchtower kick (added 2026-05-07): Watchtower 1.7.1's hourly poll can
+# silently no-op when the local image cache equals the remote manifest
+# (e.g. after an operator's `docker pull`), leaving the running container
+# stuck on the old image. Explicit POST to /v1/update after build closes
+# this gap; mirrors ansvar-mcp-gateway/.github/workflows/deploy.yml. The
+# kick is best-effort — if WATCHTOWER_HTTP_API_TOKEN is unset or the
+# endpoint is down, the hourly poll remains as the safety net. (Memory:
+# feedback_watchtower_silent_skip_after_manual_pull.md)
+#
+# DB provisioning (added 2026-05-07): if the Dockerfile COPYs a .db file
+# and that file is missing/empty/an LFS pointer after checkout, fall back
+# to downloading *.db.gz from the latest GitHub Release. Auto-skips for
+# repos that build the DB inside the Dockerfile (no `COPY data/...`),
+# which is the standard's preferred pattern. Carries forward the
+# *.db.gz glob fix from Danish-law-mcp PR #53. (Memory:
+# feedback_publish_npm_yml_post_takedown_2026_05_06.md cross-reference)
+#
+# GHCR auth uses GitHub's built-in GITHUB_TOKEN — no additional secrets needed.
+# Trivy scans the just-built image for CRITICAL and HIGH CVEs; results are
+# uploaded to the GitHub Security tab as SARIF (post-merge audit trail,
+# not a merge gate; see spec §5.1.1).
+#
+# OPTIONAL SECRET — WATCHTOWER_HTTP_API_TOKEN: org-level secret recommended
+# so the entire law-mcp fleet picks it up automatically. Without it, the
+# kick step prints an info message and exits 0 (no failure).
+#
+# =============================================================================
+
+name: Publish GHCR Image
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'data/**'
+      - 'scripts/**'
+      - 'sources.yml'
+      - 'server.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - 'Dockerfile'
+      - '.dockerignore'
+      # Include this workflow's own path so the PR that adds or modifies it
+      # rebuilds :latest on its merge commit. Without this, a PR that only
+      # touches .github/workflows/ (e.g. introducing this file) is excluded
+      # by its own filter — the workflow exists on main but never runs, and
+      # a separate "trigger" PR (e.g. a package.json bump) is needed to
+      # actually publish. See public-procurement-mcp PR #13 for the incident.
+      - '.github/workflows/publish-ghcr.yml'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+      actions: read # codeql-action/upload-sarif requires this on internal/private repos
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true # repos that ship data/database.db via Git LFS need this
+
+      - name: Lint Dockerfile (Phase B regression gate)
+        # Catches the 2026-05-09 sector-MCP binding outage class: a Dockerfile
+        # that re-runs `npm ci --ignore-scripts` in its runtime stage strips
+        # better-sqlite3's postinstall (which builds the native .node binding);
+        # every SQLite tool call then fails with `Could not locate the bindings
+        # file` at runtime. Multi-stage builds with `COPY --from=builder
+        # /app/node_modules` are the fix. See spec §3.1.1.
+        #
+        # Vendored from arch-docs scripts/lint-mcp-dockerfile.py by
+        # apply-golden-standard.sh. Backwards-compatible: if the script isn't
+        # present yet (older repos that haven't refreshed), the step warns
+        # but doesn't fail — re-apply golden standard to enable the gate.
+        run: |
+          if [ -f .github/scripts/lint-dockerfile.py ]; then
+            python3 .github/scripts/lint-dockerfile.py Dockerfile
+          else
+            echo "::warning::Phase B Dockerfile lint script not vendored at .github/scripts/lint-dockerfile.py — re-run scripts/apply-golden-standard.sh from arch-docs to enable the regression gate."
+          fi
+
+      - name: Provision database from GitHub Release if missing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # If the Dockerfile doesn't COPY a .db file, the image builds the DB
+          # itself (Cypriot's two-image pattern, etc.) — nothing to do here.
+          # Regex must skip flag arguments (--chown=USER:GROUP, --from=stage)
+          # before reaching the data/...db path. The canonical Dockerfile rendered
+          # by apply-mcp-standard.py emits `COPY --chown=nodejs:nodejs data/<file>.db`
+          # so a regex that anchors on `COPY\s+\K(data/...)` would silently miss it
+          # — which it did, fleet-wide, until this fix. Per memory
+          # feedback_verify_db_pipeline_two_traps_2026_05_08.md.
+          DB_FILES=$(grep -oP 'COPY\s+(?:--\S+\s+)*\Kdata/\S+\.db' Dockerfile 2>/dev/null || true)
+          if [ -z "$DB_FILES" ]; then
+            echo "No data/*.db file referenced in Dockerfile COPY — DB built inside image. Skipping provisioning."
+            exit 0
+          fi
+
+          for DB_FILE in $DB_FILES; do
+            if [ -f "$DB_FILE" ] && [ "$(wc -c < "$DB_FILE")" -gt 1024 ]; then
+              echo "OK: $DB_FILE present in repo ($(du -sh "$DB_FILE" | cut -f1))."
+              continue
+            fi
+
+            # Missing, empty, or LFS pointer — fall back to GitHub Release.
+            if [ -f "$DB_FILE" ] && head -1 "$DB_FILE" 2>/dev/null | grep -q 'version https://git-lfs'; then
+              echo "WARN: $DB_FILE is an LFS pointer (LFS bandwidth exhausted or runner lacks LFS)."
+            else
+              echo "WARN: $DB_FILE missing or empty."
+            fi
+
+            TAG=$(gh release view --json tagName -q '.tagName' 2>/dev/null) || true
+            if [ -z "$TAG" ]; then
+              echo "ERROR: $DB_FILE invalid and no GitHub Release available to fall back to."
+              exit 1
+            fi
+
+            mkdir -p data
+            echo "Downloading *.db.gz asset from release $TAG..."
+            # Glob match: some MCPs publish 'database.db.gz', others '<name>-free.db.gz',
+            # others a jurisdiction-specific name (e.g. ftnet.db.gz for sector regulators
+            # using the db_release_path manifest pattern).
+            if gh release download "$TAG" -p "*.db.gz" -D data/ 2>/dev/null; then
+              for gz in data/*.db.gz; do
+                [ -e "$gz" ] || continue
+                gunzip -f "$gz"
+              done
+              # Normalize filename so the Dockerfile's COPY succeeds. The Dockerfile
+              # may reference data/database.db (legacy default) or a jurisdiction-
+              # specific path like data/ftnet.db (db_release_path manifest pattern).
+              # Use $DB_FILE as the target — that's what the Dockerfile's COPY line
+              # actually references, so renaming the gunzipped asset to it makes the
+              # build succeed regardless of asset name.
+              if [ ! -f "$DB_FILE" ]; then
+                first_db=$(ls data/*.db 2>/dev/null | head -1)
+                if [ -n "$first_db" ] && [ "$first_db" != "$DB_FILE" ]; then
+                  mv "$first_db" "$DB_FILE"
+                fi
+              fi
+              if [ -f "$DB_FILE" ]; then
+                echo "OK: provisioned $(du -sh "$DB_FILE" | cut -f1) at $DB_FILE from release $TAG."
+              else
+                echo "ERROR: archive downloaded but no .db file produced at expected path $DB_FILE."
+                exit 1
+              fi
+            else
+              echo "ERROR: could not download *.db.gz from release $TAG."
+              exit 1
+            fi
+          done
+
+      - name: Set image name from package.json
+        id: meta
+        run: |
+          NAME=$(node -e "console.log(require('./package.json').name.replace('@ansvar/', ''))")
+          VERSION=$(node -e "console.log(require('./package.json').version)")
+          echo "image_name=${NAME}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/ansvar-systems/${{ steps.meta.outputs.image_name }}:latest
+            ${{ env.REGISTRY }}/ansvar-systems/${{ steps.meta.outputs.image_name }}:${{ steps.meta.outputs.version }}
+
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/ansvar-systems/${{ steps.meta.outputs.image_name }}:${{ steps.meta.outputs.version }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+
+      - name: Upload Trivy results to Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        continue-on-error: true # Code Security must be enabled on the repo for upload to succeed; non-fatal per workflow header (post-merge audit trail, not a merge gate)
+        with:
+          sarif_file: trivy-results.sarif
+
+      - name: Trigger Watchtower update on prod
+        if: success() && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        env:
+          WATCHTOWER_TOKEN: ${{ secrets.WATCHTOWER_HTTP_API_TOKEN }}
+        run: |
+          if [ -z "$WATCHTOWER_TOKEN" ]; then
+            echo "WATCHTOWER_HTTP_API_TOKEN not set — skipping kick. Prod will swap on the next hourly Watchtower poll."
+            echo "To enable near-instant deploys, add this secret (org-level recommended). Value lives in /opt/ansvar/prod/mcp/watchtower/.env on the prod host."
+            exit 0
+          fi
+          echo "Kicking Watchtower /v1/update..."
+          HTTP=$(curl -X POST -sS -o /tmp/watchtower-response \
+            -H "Authorization: Bearer $WATCHTOWER_TOKEN" \
+            -w "%{http_code}" \
+            https://watchtower.ansvar.eu/v1/update) || HTTP="000"
+          echo "Response code: $HTTP"
+          head -c 500 /tmp/watchtower-response 2>/dev/null || true
+          echo
+          if [ "$HTTP" = "200" ]; then
+            echo "OK: Watchtower scan triggered — prod should swap within seconds."
+          else
+            echo "WARN: Watchtower kick returned HTTP $HTTP. Hourly poll will swap eventually."
+          fi

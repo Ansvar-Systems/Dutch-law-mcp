@@ -1,0 +1,71 @@
+name: Automated Ingestion
+on:
+  repository_dispatch:
+    types: [upstream-data-changed]
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force full re-ingestion (ignore diff check)'
+        type: boolean
+        default: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      # 1. Fetch latest content (checks for upstream changes in content YAML)
+      - name: Fetch upstream data
+        run: npm run ingest:fetch
+
+      # 2. Diff against current database
+      - name: Check for changes
+        id: diff
+        run: |
+          npm run ingest:diff
+          echo "changed=$(cat .ingest-changed)" >> $GITHUB_OUTPUT
+
+      # 3. If changed (or forced): rebuild, test, commit.
+      # No scheduled rebuild: read-only data sources must be change-driven so
+      # upstream APIs are not repeatedly scraped for identical data.
+      - name: Rebuild database
+        if: steps.diff.outputs.changed == 'true' || github.event.inputs.force == 'true'
+        run: |
+          npm run build:db
+          npm run build
+          npm test
+          npm run test:contract || true
+
+      # 4. Update coverage manifest
+      - name: Update coverage
+        if: steps.diff.outputs.changed == 'true' || github.event.inputs.force == 'true'
+        run: npm run coverage:update
+
+      # 5. Commit and push
+      - name: Commit changes
+        if: steps.diff.outputs.changed == 'true' || github.event.inputs.force == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/ COVERAGE.md
+          SUMMARY="no summary"
+          if [ -f .ingest-summary ]; then SUMMARY=$(cat .ingest-summary); fi
+          git diff --cached --quiet || git commit -m "data: automated ingestion $(date -u +%Y-%m-%d)
+
+          Source: content refresh
+          Changes: ${SUMMARY}
+
+          Co-Authored-By: github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+          git push

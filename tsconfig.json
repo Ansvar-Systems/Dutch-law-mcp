@@ -4,7 +4,7 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": "src",
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
@@ -21,6 +21,6 @@
     "verbatimModuleSyntax": false,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src/**/*"],
+  "include": ["src"],
   "exclude": ["node_modules", "dist", "tests", "scripts"]
 }
