@@ -19,6 +19,7 @@ export interface CitationMetadata {
   source_url?: string;
   jurisdiction?: string;
   source?: string;
+  source_full_name?: string;
   article?: string;
   publisher?: string;
   license?: string;
@@ -32,6 +33,7 @@ export interface CitationMetadata {
 export interface CitationAttribution {
   jurisdiction?: string | null;
   source?: string | null;
+  source_full_name?: string | null;
   article?: string | null;
   publisher?: string | null;
   license?: string | null;
@@ -55,6 +57,7 @@ export function withCitationAttribution(
   const attributed: CitationMetadata = { ...citation };
   addIfPresent(attributed, 'jurisdiction', attribution.jurisdiction);
   addIfPresent(attributed, 'source', attribution.source);
+  addIfPresent(attributed, 'source_full_name', attribution.source_full_name);
   addIfPresent(attributed, 'article', attribution.article);
   addIfPresent(attributed, 'publisher', attribution.publisher);
   addIfPresent(attributed, 'license', attribution.license);
