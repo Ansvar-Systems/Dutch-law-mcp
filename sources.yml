@@ -1,5 +1,11 @@
 # sources.yml — Data provenance metadata
 # Reference: docs/mcp-infrastructure-blueprint.md §3
+# License axis: Dutch-Auteurswet-Art-11 (Dutch statutory public domain)
+# Statutory basis: Auteurswet (1912) Art. 11 — no copyright subsists in laws,
+# decrees or ordinances issued by public authorities, or in judicial or
+# administrative decisions. Verified verbatim 2026-05-17.
+# Cross-ref: docs/audits/2026-05-17-eu-copyright-statutory-works-batch-1b-DE-IE-IT-NL-ES.md
+# Catalog entry: infrastructure/attribution-licenses.json → "Dutch-Auteurswet-Art-11"
 
 schema_version: '1.0'
 mcp_name: 'Dutch Law MCP'
@@ -15,9 +21,9 @@ sources:
     update_frequency: 'daily'
     last_ingested: '2026-02-10'
     license_or_terms:
-      type: 'Government Open Data (CC0)'
-      url: 'https://data.overheid.nl/licenties'
-      summary: 'Dutch government open data, free to use without restrictions'
+      type: 'Dutch-Auteurswet-Art-11'
+      url: 'https://wetten.overheid.nl/jci1.3:c:BWBR0001886&artikel=11'
+      summary: 'Dutch statutory public domain (Auteurswet Art. 11). No copyright subsists in laws, decrees or ordinances issued by public authorities, or in judicial or administrative decisions. Statute-level basis on the underlying text; wetten.overheid.nl portal additionally publishes structured data under CC0 for the compilation.'
     coverage:
       scope: 'All consolidated Dutch statutes, AMvBs, ministerial regulations'
       limitations: 'Historical versions before 2002 may be incomplete'
