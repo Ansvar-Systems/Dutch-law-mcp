@@ -1,5 +1,52 @@
 # Dutch Law MCP Server
 
+<!-- ANSVAR-CTA-BEGIN -->
+> ### ▶ Try this MCP instantly via Ansvar Gateway
+> **50 free queries/day · no card required · OAuth signup at [ansvar.eu/gateway](https://ansvar.eu/gateway)**
+>
+> One endpoint, one OAuth signup, access from any MCP-compatible client.
+
+### Connect
+
+**Claude Code** (one line):
+
+```bash
+claude mcp add ansvar --transport http https://gateway.ansvar.eu/mcp
+```
+
+**Claude Desktop / Cursor** — add to `claude_desktop_config.json` (or `mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "ansvar": {
+      "type": "url",
+      "url": "https://gateway.ansvar.eu/mcp"
+    }
+  }
+}
+```
+
+**Claude.ai** — Settings → Connectors → Add custom connector → paste `https://gateway.ansvar.eu/mcp`
+
+First request opens an OAuth flow at [ansvar.eu/gateway](https://ansvar.eu/gateway). After signup, your client is bound to your account; tier (free / premium / team / company) determines fan-out, quota, and which downstream MCPs are reachable.
+
+---
+
+## Self-host this MCP
+
+You can also clone this repo and build the corpus yourself. The schema,
+fetcher, and tool implementations all live here. What is not in the repo is
+the pre-built database — TDM and standards-licensing constraints on the
+upstream sources mean we host the corpus on Ansvar infrastructure rather
+than redistribute it as a public artifact.
+
+Build your own: run this repo's ingestion script (entry-point varies per
+repo — typically `scripts/ingest.sh`, `npm run ingest`, or `make ingest`;
+check the repo root).
+<!-- ANSVAR-CTA-END -->
+
+
 **The Wetten.overheid.nl alternative for the AI age.**
 
 [![MCP Registry](https://img.shields.io/badge/MCP-Registry-blue)](https://registry.modelcontextprotocol.io)
@@ -36,8 +83,6 @@ This MCP server makes Dutch law **searchable, cross-referenceable, and AI-readab
 ## Quick Start
 
 Dutch Law is reachable through the **Ansvar MCP Gateway** at `https://gateway.ansvar.eu`. The gateway terminates OAuth, fans queries out across the Dutch corpus, and returns citation-grounded answers. There is no public unauthenticated endpoint.
-
-> The previous public proxy at `mcp.ansvar.eu/law-nl/mcp` was decommissioned 2026-05-01. The npm package `@ansvar/dutch-law-mcp` is deprecated. Both are listed for archival reference only.
 
 ### Connect via Ansvar Gateway
 
@@ -386,16 +431,9 @@ npm run populate:xrefs           # Populate EU cross-references
 
 ---
 
-## Related Projects
+## More Ansvar MCPs
 
-Ansvar runs a fleet of jurisdiction- and domain-specific MCP servers — Dutch law is one of ~100 national / EU / sector / domain MCPs reachable through the same gateway. Coverage spans EU regulations, US federal compliance, ICS / OT security, automotive cybersecurity, sanctions screening, and 70+ national law corpora across Europe, North America, Asia-Pacific, and Latin America.
-
-The unified entry point is `https://gateway.ansvar.eu`. The gateway routes a query to the correct downstream MCP based on jurisdiction, sector, and tool — single connect, full coverage.
-
-For an up-to-date inventory see the [Ansvar fleet overview](https://ansvar.eu/coverage). The corresponding GitHub orgs are [`Ansvar-Systems`](https://github.com/Ansvar-Systems) (active fleet) and the deprecated npm packages under [`@ansvar`](https://www.npmjs.com/org/ansvar) (kept only as archival pointers; they no longer install).
-
----
-
+Full fleet at [ansvar.eu/gateway](https://ansvar.eu/gateway).
 ## Contributing
 
 Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
@@ -421,7 +459,6 @@ Priority areas:
 - [x] **Full Wetten.overheid.nl coverage** -- 3,251 statutes, 77,531 provisions
 - [ ] Historical statute versions (amendment tracking)
 - [ ] Lower court coverage (Rechtbanken archives)
-- [ ] Full EU text integration (via @ansvar/eu-regulations-mcp)
 - [ ] English translations for key statutes
 - [ ] Web API for programmatic access
 
