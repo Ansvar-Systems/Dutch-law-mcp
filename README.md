@@ -319,7 +319,7 @@ All content is sourced from authoritative Dutch legal databases:
 | **Authority**        | Ministerie van Justitie en Veiligheid / Overheid.nl |
 | **Retrieval method** | Bulk download from Wetten.overheid.nl BWB API       |
 | **Language**         | Dutch (primary)                                     |
-| **License**          | Open Government License -- Netherlands              |
+| **License**          | `Dutch-Auteurswet-Art-11` -- Dutch statutory public domain (Auteurswet Art. 11) |
 | **Coverage**         | 3,251 Dutch federal laws (100% BWB corpus)          |
 | **Last ingested**    | 2026-02-22                                          |
 
@@ -486,9 +486,9 @@ Apache License 2.0. See [LICENSE](./LICENSE) for details.
 
 ### Data Licenses
 
-- **Statutes & Legislation:** Ministerie van Justitie en Veiligheid ([Open Government License -- Netherlands](https://data.overheid.nl/en/open-government-licence-netherlands))
-- **Case Law:** Rechtspraak.nl open data
-- **EU Metadata:** EUR-Lex (EU public domain)
+- **Statutes & Legislation:** `Dutch-Auteurswet-Art-11` -- Dutch statutory public domain. Auteurswet Art. 11 (1912) states that no copyright subsists in laws, decrees or ordinances issued by public authorities, or in judicial or administrative decisions. Verified verbatim 2026-05-17 -- see [`docs/audits/2026-05-17-eu-copyright-statutory-works-batch-1b-DE-IE-IT-NL-ES.md`](https://github.com/Ansvar-Systems/Ansvar-Architecture-Documentation/blob/main/docs/audits/2026-05-17-eu-copyright-statutory-works-batch-1b-DE-IE-IT-NL-ES.md). Catalog entry: `Dutch-Auteurswet-Art-11` in `infrastructure/attribution-licenses.json`.
+- **Case Law:** Rechtspraak.nl -- same statutory basis (Auteurswet Art. 11 judicial-decision clause)
+- **EU Metadata:** EUR-Lex (EU public domain, Decision 2011/833/EU)
 
 ---
 
