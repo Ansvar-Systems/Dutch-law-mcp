@@ -334,6 +334,101 @@ artifact if it has been tampered with in transit.
 
 ---
 
+## Try it out — verified sample requests and responses
+
+Two pairs captured from a real run against this example. Both prove
+the agent reached the BWB corpus (rather than answering from the
+model's training data): `list_sources` returns provenance metadata
+that the model would have no way to fabricate, and `get_provision`
+returns the SQLite-stored text of a specific article verbatim.
+
+### Sample 1 — `list_sources` (the corpus identifies itself)
+
+**Request**
+
+```bash
+MID=$(uuidgen | tr A-Z a-z); CID=$(uuidgen | tr A-Z a-z); TID=$(uuidgen | tr A-Z a-z)
+
+curl -s -X POST http://localhost:3773/ \
+  -H 'Content-Type: application/json' \
+  -d @- <<JSON
+{
+  "jsonrpc": "2.0",
+  "id": "$MID",
+  "method": "message/send",
+  "params": {
+    "configuration": { "accepted_output_modes": ["text/plain"] },
+    "message": {
+      "message_id": "$MID",
+      "context_id": "$CID",
+      "task_id":    "$TID",
+      "kind": "message",
+      "role": "user",
+      "parts": [
+        { "kind": "text",
+          "text": "Call the list_sources tool. Then quote me the name, authority, license, and coverage of the FIRST source entry, verbatim. No other text." }
+      ]
+    }
+  }
+}
+JSON
+```
+
+**Response** (text part of the artifact, with Bindu signature)
+
+```text
+- Name: Wetten.overheid.nl
+- Authority: Dutch Government (Overheid.nl)
+- License: Government Open Data (CC0)
+- Coverage: All consolidated Dutch statutes, AMvBs, and ministerial regulations
+
+[Bindu Ed25519 signature: 263RjxS3qH6upxxi4TkKyjdVaTZF3uDeKRXWujkekdtgC4Hbda…]
+```
+
+The four fields match exactly what a direct stdio probe of the
+`list_sources` MCP tool returns — confirming the agent reached the
+corpus rather than answering from prior knowledge.
+
+### Sample 2 — `get_provision` (verbatim statute text)
+
+**Request**
+
+Same envelope as above, with the `text` part replaced by:
+
+```text
+Wat zegt artikel 6:162 BW over onrechtmatige daad? Geef de tekst verbatim met BWB-citatie.
+```
+
+**Response** (text part of the artifact)
+
+```text
+Artikel 6:162 BW over onrechtmatige daad luidt als volgt:
+
+> Hij die jegens een ander een onrechtmatige daad pleegt, welke hem kan worden toegerekend, is verplicht de schade die de ander dientengevolge lijdt, te vergoeden.
+> Als onrechtmatige daad worden aangemerkt een inbreuk op een recht en een doen of nalaten in strijd met een wettelijke plicht of met hetgeen volgens ongeschreven recht in het maatschappelijk verkeer betaamt, een en ander behoudens de aanwezigheid van een rechtvaardigingsgrond.
+> Een onrechtmatige daad kan aan de dader worden toegerekend, indien zij te wijten is aan zijn schuld of aan een oorzaak welke krachtens de wet of de in het verkeer geldende opvattingen voor zijn rekening komt.
+
+Bron: [Burgerlijk Wetboek Boek 6, Verbintenissenrecht (BWBR0005289) art. 6:162](https://wetten.overheid.nl/BWBR0005289).
+
+[Bindu Ed25519 signature: 2QQYd9BWfHgKQkeVM8XFfTCFgqCijGMbN6VE2xRm4DN24V1d9F…]
+```
+
+The agent followed the citation rules from `prompt.py`: a one-line
+introduction, the operative text in a blockquote verbatim from
+`get_provision`, and a final citation in
+`Burgerlijk Wetboek Boek 6 (BWBR0005289) art. 6:162` form.
+
+### Latency
+
+On a 2024-era laptop with `openai/gpt-4o` via OpenRouter:
+
+| Request | End-to-end latency | Notes |
+| --- | --- | --- |
+| First request after agent start | ~5–7 seconds | Includes the node `dist/index.js` cold-start and the initial MCPTools handshake. |
+| Subsequent requests | ~3–5 seconds | The MCP connection is held open for the agent's lifetime, so only the model round-trip and a single tool call add latency. |
+
+---
+
 ## More sample queries
 
 Below are five more questions, each chosen to exercise a different
