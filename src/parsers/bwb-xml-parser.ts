@@ -143,7 +143,9 @@ function getKopTitel(node: Record<string, unknown>): string | undefined {
 
 /**
  * Determine the article number from an artikel element.
- * First tries the `@_nr` attribute, then falls back to `kop > nr`.
+ * First tries the `@_nr` attribute, then falls back to `kop > nr`, then to
+ * the "Eenig/Enig artikel" convention (pre-war single-article statutes whose
+ * sole article carries only a kop label) → ref 'enig'.
  */
 function getArticleNumber(artikel: Record<string, unknown>): string {
   // Try @_nr attribute first
@@ -153,6 +155,16 @@ function getArticleNumber(artikel: Record<string, unknown>): string {
   // Fall back to kop > nr
   const kopNr = getKopNr(artikel);
   if (kopNr) return kopNr;
+
+  // Single-article statutes: kop label (or @_label) reads "Eenig artikel" /
+  // "Enig artikel" with no number anywhere.
+  const kop = artikel['kop'];
+  const kopLabel =
+    kop != null && typeof kop === 'object'
+      ? extractText((kop as Record<string, unknown>)['label']).trim()
+      : '';
+  const label = kopLabel || attrToString(artikel['@_label']).trim();
+  if (/^ee?nig artikel$/i.test(label)) return 'enig';
 
   return '';
 }
@@ -195,6 +207,14 @@ function collectArtikels(
       book: boekNr && isNumericBook(boekNr) ? boekNr : context.book,
     };
     collectArtikels(boekObj, newContext, provisions);
+  }
+
+  // Process deel (part-level wrapper above hoofdstuk — Aanbestedingswet 2012
+  // uses wettekst > deel > hoofdstuk; without this the whole statute parses
+  // to zero provisions).
+  for (const deel of toArray(obj['deel'])) {
+    if (deel == null || typeof deel !== 'object') continue;
+    collectArtikels(deel as Record<string, unknown>, context, provisions);
   }
 
   // Process hoofdstuk (chapter-level, used in Grondwet, Awb, etc.)
@@ -274,9 +294,17 @@ export function parseBwbXml(xml: string): ParsedStatute {
     ignoreAttributes: false,
     attributeNamePrefix: '@_',
     isArray: (name: string) =>
-      ['boek', 'hoofdstuk', 'titeldeel', 'afdeling', 'paragraaf', 'artikel', 'lid', 'al'].includes(
-        name,
-      ),
+      [
+        'boek',
+        'deel',
+        'hoofdstuk',
+        'titeldeel',
+        'afdeling',
+        'paragraaf',
+        'artikel',
+        'lid',
+        'al',
+      ].includes(name),
   });
 
   const doc = parser.parse(xml) as Record<string, unknown>;

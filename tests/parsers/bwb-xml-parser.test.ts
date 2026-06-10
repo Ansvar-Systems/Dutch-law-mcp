@@ -412,3 +412,78 @@ describe('parseBwbXml', () => {
     });
   });
 });
+
+// Sample XML: statute whose wettekst wraps chapters in <deel> (Aanbestedingswet
+// 2012 structure: wettekst > deel > hoofdstuk > artikel). The parser ignored
+// <deel> containers entirely, yielding 0 provisions for a 451-article statute.
+const DEEL_WRAPPED_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<toestand bwb-id="BWBR0032203">
+<wetgeving soort="wet">
+  <intitule>Aanbestedingswet 2012</intitule>
+  <citeertitel status="officieel">Aanbestedingswet 2012</citeertitel>
+  <wet-besluit>
+    <wettekst>
+      <deel>
+        <kop><label>Deel</label><nr>1</nr><titel>Algemene bepalingen</titel></kop>
+        <hoofdstuk>
+          <kop><label>Hoofdstuk</label><nr>1.1</nr><titel>Begripsbepalingen</titel></kop>
+          <artikel nr="1.1">
+            <kop><nr>1.1</nr></kop>
+            <lid nr="1"><al>In deze wet en de daarop berustende bepalingen wordt verstaan onder aanbestedende dienst: de staat, een provincie, een gemeente, een waterschap of een publiekrechtelijke instelling.</al></lid>
+          </artikel>
+        </hoofdstuk>
+      </deel>
+      <deel>
+        <kop><label>Deel</label><nr>2</nr><titel>Overheidsopdrachten</titel></kop>
+        <hoofdstuk>
+          <kop><label>Hoofdstuk</label><nr>2.1</nr><titel>Reikwijdte</titel></kop>
+          <artikel nr="2.1">
+            <kop><nr>2.1</nr></kop>
+            <al>Deel 2 van deze wet is van toepassing op overheidsopdrachten boven de Europese drempelwaarden.</al>
+          </artikel>
+        </hoofdstuk>
+      </deel>
+    </wettekst>
+  </wet-besluit>
+</wetgeving>
+</toestand>`;
+
+describe('parseBwbXml — deel-wrapped statutes (Aanbestedingswet class)', () => {
+  it('descends into <deel> containers and extracts all articles', () => {
+    const parsed = parseBwbXml(DEEL_WRAPPED_XML);
+    expect(parsed.bwb_id).toBe('BWBR0032203');
+    expect(parsed.provisions.map((p) => p.provision_ref)).toEqual(['1.1', '2.1']);
+    expect(parsed.provisions[0].chapter).toBe('1.1');
+    expect(parsed.provisions[0].content).toContain('aanbestedende dienst');
+  });
+});
+
+// Sample XML: pre-war single-article statute ("Eenig artikel" — the article
+// carries only a kop label, no nr element and no nr attribute). Skipping it
+// makes the statute parse to zero provisions and deterministically fails
+// every sweep run (live: BWBR0001889 from 1915, BWBR0001924 from 1925).
+const EENIG_ARTIKEL_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<toestand bwb-id="BWBR0001889">
+<wetgeving soort="wet">
+  <intitule>Wet van 6 maart 1915, houdende bepaling betreffende het gebruik van grond voor mijnontginning</intitule>
+  <citeertitel status="officieel">Wet bepaling betreffende het gebruik van grond voor mijnontginning</citeertitel>
+  <wet-besluit>
+    <wettekst>
+      <artikel label="Eenig artikel">
+        <kop><label>Eenig artikel</label></kop>
+        <lid nr="1"><al>Bij eene acte van concessie kan aan den concessionaris de verplichting worden opgelegd grond af te staan.</al></lid>
+        <lid nr="2"><al>De afstand geschiedt tegen schadeloosstelling.</al></lid>
+      </artikel>
+    </wettekst>
+  </wet-besluit>
+</wetgeving>
+</toestand>`;
+
+describe('parseBwbXml — single-article statutes (Eenig artikel class)', () => {
+  it('extracts the sole unnumbered article under the ref "enig"', () => {
+    const parsed = parseBwbXml(EENIG_ARTIKEL_XML);
+    expect(parsed.provisions.length).toBe(1);
+    expect(parsed.provisions[0].provision_ref).toBe('enig');
+    expect(parsed.provisions[0].content).toContain('acte van concessie');
+  });
+});
