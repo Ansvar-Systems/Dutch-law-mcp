@@ -1,4 +1,19 @@
 #!/usr/bin/env tsx
+
+/**
+ * DEPRECATED 2026-06-10 (Dutch-law-mcp#119): this script acquires the OLDEST
+ * toestand (un-versioned URL fallback / first-occurrence dedup / pinned
+ * historical dates) and writes seeds the refresh policy cannot reason about.
+ * Use `npm run ingest:sweep` or scripts/ingest-single-bwb.ts instead.
+ */
+if (process.env.FORCE_LEGACY_INGEST !== '1') {
+  console.error(
+    'DEPRECATED: this script acquires the OLDEST consolidation of each statute (issue #119). ' +
+      'Use `npm run ingest:sweep` or scripts/ingest-single-bwb.ts. ' +
+      'Set FORCE_LEGACY_INGEST=1 only if you understand the staleness consequences.',
+  );
+  process.exit(2);
+}
 /**
  * Comprehensive Dutch statute ingestion script.
  *

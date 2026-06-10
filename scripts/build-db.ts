@@ -421,11 +421,14 @@ function main(): void {
   validateCitationSeedFields(seeds);
 
   if (seeds.length === 0) {
-    console.log('No seed files found. Database created with empty schema.');
-    db.exec('ANALYZE');
+    // An empty-schema "success" is a silent corpus wipe waiting to ship: the
+    // fix-sweep rebuild contract (sources.yml) runs this command and would
+    // diff a 0-document DB against prod as if it were a real candidate.
     db.close();
-    console.log('Done.');
-    return;
+    throw new Error(
+      `No seed files found in ${SEED_DIR} — refusing to build an empty corpus database. ` +
+        'Run `npm run ingest` (and `npm run ingest:backfill`) first; data/seed is not committed to git.',
+    );
   }
 
   // 5. Insert data in a transaction
