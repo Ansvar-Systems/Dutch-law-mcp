@@ -52,7 +52,10 @@
     "coverage:update": "tsx scripts/update-coverage.ts",
     "freshness:check": "tsx scripts/check-freshness.ts",
     "coverage:verify": "tsx scripts/verify-coverage.ts",
-    "ingest:full": "npm run ingest:fetch && npm run build:db && npm run coverage:update"
+    "ingest:full": "npm run ingest:fetch && npm run build:db && npm run coverage:update",
+    "ingest:refresh": "tsx scripts/ingest-bwb.ts --refresh",
+    "ingest:backfill": "tsx scripts/ingest-backfill-ids.ts data/backfill-ids.txt --refresh",
+    "ingest:sweep": "npm run ingest:refresh && npm run ingest:backfill"
   },
   "dependencies": {
     "@ansvar/mcp-sqlite": "^1.0.0",

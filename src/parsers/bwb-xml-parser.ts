@@ -105,16 +105,63 @@ function extractArtikelContent(artikel: Record<string, unknown>): string {
     }
   }
 
-  // Also try direct `al` elements (artikels without lid)
-  if (leden.length === 0) {
-    const directAls = toArray(artikel['al']);
-    for (const al of directAls) {
-      const text = extractText(al).trim();
+  // Also extract direct `al` elements. Not gated on the absence of lid:
+  // some documents carry content-less lid elements (only a lidnr) with the
+  // paragraph text in sibling al elements directly under artikel
+  // (live: BWBR0003126 art. 2) — gating on `leden.length === 0` lost them.
+  const directAls = toArray(artikel['al']);
+  for (const al of directAls) {
+    const text = extractText(al).trim();
+    if (text) parts.push(text);
+  }
+
+  // Lists directly under artikel (no lid wrapper) — e.g. 1960s-era
+  // instellingsbesluiten put the whole body in artikel > lijst > li.
+  const artikelLists = toArray(artikel['lijst'] ?? artikel['lista']);
+  for (const list of artikelLists) {
+    if (list == null || typeof list !== 'object') continue;
+    const listObj = list as Record<string, unknown>;
+    for (const item of toArray(listObj['li'])) {
+      const text = extractText(item).trim();
       if (text) parts.push(text);
     }
   }
 
+  // Definition lists (Begripsbepalingen articles): definitielijst >
+  // definitie-item > term + definitie.
+  for (const defList of toArray(artikel['definitielijst'])) {
+    if (defList == null || typeof defList !== 'object') continue;
+    const defListObj = defList as Record<string, unknown>;
+    for (const item of toArray(defListObj['definitie-item'])) {
+      if (item == null || typeof item !== 'object') continue;
+      const itemObj = item as Record<string, unknown>;
+      const term = extractMixedText(itemObj['term']).trim();
+      const definitie = extractText(itemObj['definitie']).trim();
+      const pair = [term, definitie].filter(Boolean).join(' ');
+      if (pair) parts.push(pair);
+    }
+  }
+
   return parts.join('\n');
+}
+
+/**
+ * Extract text from a node INCLUDING child-element text when the node has
+ * mixed content (`<term><nadruk>houder</nadruk>:</term>` must yield
+ * "houder:", not ":"). extractText returns only `#text` for mixed nodes —
+ * changing that globally would re-text the whole corpus, so this stays
+ * scoped to short label-like elements where child-then-text order holds.
+ */
+function extractMixedText(node: unknown): string {
+  if (node == null || typeof node !== 'object') return extractText(node);
+  const obj = node as Record<string, unknown>;
+  const childParts: string[] = [];
+  for (const key of Object.keys(obj)) {
+    if (key.startsWith('@_') || key === '#text') continue;
+    childParts.push(extractMixedText(obj[key]));
+  }
+  const text = '#text' in obj ? String(obj['#text']) : '';
+  return [childParts.filter(Boolean).join(' '), text].filter(Boolean).join('');
 }
 
 /**
@@ -143,7 +190,9 @@ function getKopTitel(node: Record<string, unknown>): string | undefined {
 
 /**
  * Determine the article number from an artikel element.
- * First tries the `@_nr` attribute, then falls back to `kop > nr`.
+ * First tries the `@_nr` attribute, then falls back to `kop > nr`, then to
+ * the "Eenig/Enig artikel" convention (pre-war single-article statutes whose
+ * sole article carries only a kop label) → ref 'enig'.
  */
 function getArticleNumber(artikel: Record<string, unknown>): string {
   // Try @_nr attribute first
@@ -153,6 +202,16 @@ function getArticleNumber(artikel: Record<string, unknown>): string {
   // Fall back to kop > nr
   const kopNr = getKopNr(artikel);
   if (kopNr) return kopNr;
+
+  // Single-article statutes: kop label (or @_label) reads "Eenig artikel" /
+  // "Enig artikel" with no number anywhere.
+  const kop = artikel['kop'];
+  const kopLabel =
+    kop != null && typeof kop === 'object'
+      ? extractText((kop as Record<string, unknown>)['label']).trim()
+      : '';
+  const label = kopLabel || attrToString(artikel['@_label']).trim();
+  if (/^ee?nig artikel$/i.test(label)) return 'enig';
 
   return '';
 }
@@ -195,6 +254,14 @@ function collectArtikels(
       book: boekNr && isNumericBook(boekNr) ? boekNr : context.book,
     };
     collectArtikels(boekObj, newContext, provisions);
+  }
+
+  // Process deel (part-level wrapper above hoofdstuk — Aanbestedingswet 2012
+  // uses wettekst > deel > hoofdstuk; without this the whole statute parses
+  // to zero provisions).
+  for (const deel of toArray(obj['deel'])) {
+    if (deel == null || typeof deel !== 'object') continue;
+    collectArtikels(deel as Record<string, unknown>, context, provisions);
   }
 
   // Process hoofdstuk (chapter-level, used in Grondwet, Awb, etc.)
@@ -274,9 +341,17 @@ export function parseBwbXml(xml: string): ParsedStatute {
     ignoreAttributes: false,
     attributeNamePrefix: '@_',
     isArray: (name: string) =>
-      ['boek', 'hoofdstuk', 'titeldeel', 'afdeling', 'paragraaf', 'artikel', 'lid', 'al'].includes(
-        name,
-      ),
+      [
+        'boek',
+        'deel',
+        'hoofdstuk',
+        'titeldeel',
+        'afdeling',
+        'paragraaf',
+        'artikel',
+        'lid',
+        'al',
+      ].includes(name),
   });
 
   const doc = parser.parse(xml) as Record<string, unknown>;
