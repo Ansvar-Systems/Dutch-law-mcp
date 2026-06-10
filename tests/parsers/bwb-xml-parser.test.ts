@@ -487,3 +487,111 @@ describe('parseBwbXml — single-article statutes (Eenig artikel class)', () => 
     expect(parsed.provisions[0].content).toContain('acte van concessie');
   });
 });
+
+// Sample XML: article whose body is a lijst DIRECTLY under artikel (no lid
+// wrapper) — e.g. BWBR0002640 art. 7 (1968). The extractor read lid>al,
+// lid>lijst and direct al, but not artikel>lijst, so 51 such provisions
+// exported empty and were dropped from the chassis corpus.
+const ARTIKEL_LIJST_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<toestand bwb-id="BWBR0002640">
+<wetgeving soort="ministeriele-regeling">
+  <intitule>Instelling Commissie</intitule>
+  <citeertitel status="officieel">Instelling Commissie</citeertitel>
+  <wet-besluit>
+    <wettekst>
+      <artikel nr="7">
+        <kop><label>Artikel</label><nr>7</nr></kop>
+        <lijst nr-sluiting="">
+          <li><li.nr>a.</li.nr><al>Aan de commissie wordt de bevoegdheid verleend werkgroepen in te stellen.</al></li>
+          <li><li.nr>b.</li.nr><al>De commissie is voorts bevoegd contacten te onderhouden met lagere overheden.</al></li>
+        </lijst>
+      </artikel>
+    </wettekst>
+  </wet-besluit>
+</wetgeving>
+</toestand>`;
+
+describe('parseBwbXml — artikel-level lijst content (no lid wrapper)', () => {
+  it('extracts list-item text as the article content', () => {
+    const parsed = parseBwbXml(ARTIKEL_LIJST_XML);
+    expect(parsed.provisions.length).toBe(1);
+    const content = parsed.provisions[0].content;
+    expect(content).toContain('werkgroepen in te stellen');
+    expect(content).toContain('lagere overheden');
+    expect(content).toContain('a.');
+  });
+});
+
+// Sample XML: definitions article — content lives in definitielijst >
+// definitie-item > term + definitie (no lid wrapper). Live class: nine
+// Begripsbepalingen articles (e.g. BWBR0003988 art. 1, BWBR0003217 art. 1
+// with 5,330 chars of definitions) exported empty and were dropped.
+const DEFINITIELIJST_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<toestand bwb-id="BWBR0003988">
+<wetgeving soort="ministeriele-regeling">
+  <intitule>Privacyreglement</intitule>
+  <citeertitel status="officieel">Privacyreglement</citeertitel>
+  <wet-besluit>
+    <wettekst>
+      <artikel nr="1">
+        <kop><label>Artikel</label><nr>1</nr><titel>Begripsbepalingen</titel></kop>
+        <definitielijst plaatsing="inline">
+          <definitie-item>
+            <term><nadruk type="cur">persoonsgegevens:</nadruk></term>
+            <definitie><al>gegevens die op individuele natuurlijke personen herleidbaar zijn;</al></definitie>
+          </definitie-item>
+          <definitie-item>
+            <term><nadruk type="cur">houder</nadruk>:</term>
+            <definitie><al>de directeur van de dienst;</al></definitie>
+          </definitie-item>
+        </definitielijst>
+      </artikel>
+    </wettekst>
+  </wet-besluit>
+</wetgeving>
+</toestand>`;
+
+describe('parseBwbXml — definitielijst articles (Begripsbepalingen class)', () => {
+  it('extracts term + definition pairs as the article content', () => {
+    const parsed = parseBwbXml(DEFINITIELIJST_XML);
+    expect(parsed.provisions.length).toBe(1);
+    const content = parsed.provisions[0].content;
+    expect(content).toContain('persoonsgegevens');
+    expect(content).toContain('herleidbaar');
+    expect(content).toContain('houder');
+    expect(content).toContain('directeur van de dienst');
+  });
+});
+
+// Sample XML: article where the lid elements carry only a lidnr (plus
+// metadata) and the paragraph text sits in SIBLING al elements directly
+// under artikel (live: BWBR0003126 art. 2). The direct-al branch was gated
+// on "no lid elements", so these articles extracted empty.
+const LID_SIBLING_AL_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<toestand bwb-id="BWBR0003126">
+<wetgeving soort="ministeriele-regeling">
+  <intitule>Overgangsregeling</intitule>
+  <citeertitel status="officieel">Overgangsregeling</citeertitel>
+  <wet-besluit>
+    <wettekst>
+      <artikel nr="2">
+        <kop><label>Artikel</label><nr>2</nr></kop>
+        <lid><lidnr>1</lidnr></lid>
+        <al>Deze regeling is slechts van toepassing op de vóór 1 januari 1992 gesloten onderhoudsovereenkomsten.</al>
+        <lid><lidnr>2</lidnr></lid>
+        <al>De overeenkomsten worden beheerd door de provincie.</al>
+      </artikel>
+    </wettekst>
+  </wet-besluit>
+</wetgeving>
+</toestand>`;
+
+describe('parseBwbXml — lid-sibling al content (empty-lid class)', () => {
+  it('extracts direct al text even when (content-less) lid elements exist', () => {
+    const parsed = parseBwbXml(LID_SIBLING_AL_XML);
+    expect(parsed.provisions.length).toBe(1);
+    const content = parsed.provisions[0].content;
+    expect(content).toContain('onderhoudsovereenkomsten');
+    expect(content).toContain('beheerd door de provincie');
+  });
+});
