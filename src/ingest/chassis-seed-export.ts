@@ -3,22 +3,26 @@
  *
  * The fleet translator (ansvar-mcp-fleet mcps/dutch-law/scripts/
  * build-chassis-db.ts) consumes the canonical shape
- * `{ id, type, title, url, provisions: [{provision_ref, content}] }` with
- * id "nl:bwb:<digits>" — its header explicitly defers this adapter to this
- * repo. Deterministic transform only; no content is authored here.
+ * `{ id, type, title, status?, url, provisions: [{provision_ref, title?,
+ * content}] }` — its header explicitly defers this adapter to this repo.
+ * Provision titles feed the translator's content_fts title column
+ * (heading-only concept recall) and the document status feeds the mcp-base
+ * repealed-demotion ranking; both MUST be forwarded when the seed carries
+ * them. Deterministic transform only; no content is authored here.
  */
 
 interface IngestSeed {
-  documents?: Array<{ id?: string; type?: string; title?: string; url?: string }>;
-  provisions?: Array<{ provision_ref?: string; content?: string }>;
+  documents?: Array<{ id?: string; type?: string; title?: string; status?: string; url?: string }>;
+  provisions?: Array<{ provision_ref?: string; title?: string; content?: string }>;
 }
 
 export interface ChassisStatuteSeed {
   id: string;
   type: string;
   title: string;
+  status?: string;
   url: string;
-  provisions: Array<{ provision_ref: string; content: string }>;
+  provisions: Array<{ provision_ref: string; title?: string; content: string }>;
 }
 
 function chassisId(bwbId: string): string {
@@ -31,6 +35,21 @@ function chassisId(bwbId: string): string {
   return `nl:${bwbId}`;
 }
 
+function isExportable(p: { provision_ref?: string; content?: string }): boolean {
+  return Boolean(p.provision_ref && p.content && p.content.trim() !== '');
+}
+
+/**
+ * Provision refs the export filter drops (empty/whitespace content or missing
+ * ref). Callers MUST surface these — a dropped provision is a coverage
+ * regression a corpus swap has to be able to audit.
+ */
+export function droppedProvisionRefs(seed: IngestSeed): string[] {
+  return (seed.provisions ?? [])
+    .filter((p) => !isExportable(p))
+    .map((p) => p.provision_ref ?? '(no ref)');
+}
+
 export function toChassisSeed(seed: IngestSeed): ChassisStatuteSeed {
   const doc = seed.documents?.[0];
   if (!doc?.id) {
@@ -40,9 +59,12 @@ export function toChassisSeed(seed: IngestSeed): ChassisStatuteSeed {
     id: chassisId(doc.id),
     type: doc.type ?? 'statute',
     title: doc.title ?? '',
+    ...(doc.status ? { status: doc.status } : {}),
     url: doc.url ?? `https://wetten.overheid.nl/${doc.id}`,
-    provisions: (seed.provisions ?? [])
-      .filter((p) => p.provision_ref && p.content && p.content.trim() !== '')
-      .map((p) => ({ provision_ref: p.provision_ref as string, content: p.content as string })),
+    provisions: (seed.provisions ?? []).filter(isExportable).map((p) => ({
+      provision_ref: p.provision_ref as string,
+      ...(p.title ? { title: p.title } : {}),
+      content: p.content as string,
+    })),
   };
 }

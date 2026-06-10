@@ -4,60 +4,123 @@
  * write seeds for them. Built for the 2026-06-10 coverage reconciliation
  * (fleet#233): the deployed corpus contains ~1,170 documents (AMvBs, older
  * instruments) that the SRU `dcterms.type=wet` discovery never returns — this
- * fetches exactly those, fresh, so a corpus swap never regresses coverage.
+ * fetches exactly those so a corpus swap never regresses coverage. The
+ * canonical list lives at data/backfill-ids.txt (`npm run ingest:backfill`).
  *
- * A document that no longer exists upstream (404 / no provisions) is reported
- * and skipped — that is a finding (genuinely gone), not an error.
+ * Acquisition is per-id SRU resolution to the NEWEST in-force toestand — the
+ * un-versioned repository URL 301-redirects to the OLDEST toestand and is
+ * never used. Three outcomes are kept strictly apart:
  *
- * Usage: tsx scripts/ingest-backfill-ids.ts <id-list-file> [--force]
+ *   gone   — zero SRU records or 404/no provisions upstream: a finding
+ *            (genuinely gone), reported and skipped.
+ *   error  — transport/parse/local-write failure: retried, then counted as a
+ *            FAILURE; the run exits non-zero and the id is NOT recorded as
+ *            gone. A flaky network must never read as upstream deletions.
+ *   ok     — seed written, stamped with the fetched toestand.
+ *
+ * Usage: tsx scripts/ingest-backfill-ids.ts <id-list-file> [--force] [--refresh]
+ *   --force    refetch every id, even with a fresh seed present
+ *   --refresh  refetch ids whose newest upstream toestand differs from the
+ *              seed's stamp (or whose freshness cannot be proven)
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseBwbXml } from '../src/parsers/bwb-xml-parser.js';
-import { stampIngestMeta } from '../src/ingest/refresh-policy.js';
+import { decideFetch, type SeedIngestMeta } from '../src/ingest/refresh-policy.js';
+import { parseIdList } from '../src/ingest/id-list.js';
+import { resolveNewestToestand } from '../src/ingest/sru-resolve.js';
+import { fetchWithRetry } from '../src/ingest/http-retry.js';
+import { buildSeed } from '../src/ingest/seed-writer.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SEED_DIR = path.resolve(__dirname, '..', 'data', 'seed');
-const BWB_XML_BASE = 'https://repository.officiele-overheidspublicaties.nl/bwb';
 const RATE_LIMIT_MS = 2000;
+
+const GONE_FILE = '/tmp/dutch-backfill-gone.txt';
+const ERROR_FILE = '/tmp/dutch-backfill-errors.txt';
 
 const listFile = process.argv[2];
 const FORCE = process.argv.includes('--force');
+const REFRESH = process.argv.includes('--refresh');
 if (!listFile) {
-  process.stderr.write('Usage: tsx scripts/ingest-backfill-ids.ts <id-list-file> [--force]\n');
+  process.stderr.write(
+    'Usage: tsx scripts/ingest-backfill-ids.ts <id-list-file> [--force] [--refresh]\n',
+  );
   process.exit(2);
 }
 
-const ids = fs
-  .readFileSync(listFile, 'utf-8')
-  .split('\n')
-  .map((l) => l.trim())
-  .filter((l) => /^BWB[RV]\d+$/.test(l));
+const ids = parseIdList(fs.readFileSync(listFile, 'utf-8'));
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+function readExistingMeta(seedPath: string): SeedIngestMeta | null {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(seedPath, 'utf-8')) as { _ingest?: SeedIngestMeta };
+    return parsed._ingest ?? null;
+  } catch {
+    return null; // unreadable seed -> freshness unprovable -> refetch
+  }
+}
+
 async function main(): Promise<void> {
   console.log(`=== BWB targeted backfill: ${ids.length} ids ===`);
+  const today = new Date().toISOString().slice(0, 10);
   let fetched = 0;
   let gone = 0;
   let skipped = 0;
   const goneIds: string[] = [];
+  const errorIds: string[] = [];
 
   for (let i = 0; i < ids.length; i++) {
     const id = ids[i];
+    const tag = `  [${i + 1}/${ids.length}] ${id}`;
     const seedPath = path.join(SEED_DIR, `${id}.json`);
-    if (fs.existsSync(seedPath) && !FORCE) {
+    const seedExists = fs.existsSync(seedPath);
+
+    // Cheap skip without a network call: additive mode keeps any existing seed.
+    if (seedExists && !FORCE && !REFRESH) {
       skipped++;
       continue;
     }
-    const url = `${BWB_XML_BASE}/${id}/xml/${id}.xml`;
+
     try {
-      const res = await fetch(url);
+      const resolved = await resolveNewestToestand(id, { today });
+      if (!resolved) {
+        console.log(`${tag} — no SRU records (gone upstream)`);
+        gone++;
+        goneIds.push(id);
+        await sleep(RATE_LIMIT_MS);
+        continue;
+      }
+
+      if (seedExists && !FORCE) {
+        const decision = decideFetch({
+          seedExists,
+          refresh: REFRESH,
+          existingMeta: readExistingMeta(seedPath),
+          sruModified: resolved.modified,
+          upstreamToestand: resolved.toestand,
+        });
+        if (decision === 'skip_existing' || decision === 'skip_current') {
+          skipped++;
+          await sleep(RATE_LIMIT_MS);
+          continue;
+        }
+        console.log(`${tag} — ${decision}, fetching...`);
+      }
+
+      if (!resolved.toestandUrl) {
+        // No toestand URL means we cannot acquire current text safely; the
+        // un-versioned URL would silently serve the oldest consolidation.
+        throw new Error('SRU record carries no toestand URL');
+      }
+
+      const res = await fetchWithRetry(resolved.toestandUrl);
       if (!res.ok) {
-        console.log(`  [${i + 1}/${ids.length}] ${id} — HTTP ${res.status} (gone upstream)`);
+        console.log(`${tag} — HTTP ${res.status} (gone upstream)`);
         gone++;
         goneIds.push(id);
         await sleep(RATE_LIMIT_MS);
@@ -65,57 +128,52 @@ async function main(): Promise<void> {
       }
       const parsed = parseBwbXml(await res.text());
       if (!parsed.provisions.length) {
-        console.log(`  [${i + 1}/${ids.length}] ${id} — no provisions (gone/empty upstream)`);
+        console.log(`${tag} — no provisions (gone/empty upstream)`);
         gone++;
         goneIds.push(id);
         await sleep(RATE_LIMIT_MS);
         continue;
       }
-      const seed = stampIngestMeta(
-        {
-          documents: [
-            {
-              id,
-              type: 'statute' as const,
-              status: 'in_force',
-              ...(parsed.in_force_date ? { in_force_date: parsed.in_force_date } : {}),
-              title: parsed.title,
-              url: `https://wetten.overheid.nl/${id}`,
-            },
-          ],
-          provisions: parsed.provisions.map((p) => ({
-            document_id: id,
-            provision_ref: p.provision_ref,
-            book: p.book,
-            chapter: p.chapter,
-            section: p.section,
-            article: p.article,
-            title: p.title,
-            content: p.content,
-          })),
-        },
-        // sru_modified unknown for direct fetches: null => refresh mode treats
-        // freshness as unprovable and refetches — accuracy over cheapness.
-        { sruModified: null, now: new Date().toISOString() },
-      );
+      const seed = buildSeed({
+        bwbId: id,
+        title: parsed.title,
+        provisions: parsed.provisions,
+        in_force_date: parsed.in_force_date,
+        sruModified: resolved.modified,
+        toestand: resolved.toestand,
+        now: new Date().toISOString(),
+      });
       fs.writeFileSync(seedPath, JSON.stringify(seed, null, 2), 'utf-8');
-      console.log(`  [${i + 1}/${ids.length}] ${id} — ${parsed.provisions.length} provisions`);
+      console.log(
+        `${tag} — ${parsed.provisions.length} provisions (toestand ${resolved.toestand ?? '?'})`,
+      );
       fetched++;
     } catch (e) {
-      console.log(`  [${i + 1}/${ids.length}] ${id} — ERROR ${(e as Error).message}`);
-      gone++;
-      goneIds.push(id);
+      // Transport/parse/local failure — a FAILURE, never "gone".
+      console.error(`${tag} — ERROR ${(e as Error).message}`);
+      errorIds.push(id);
     }
     await sleep(RATE_LIMIT_MS);
   }
 
   console.log(
-    `\n=== Backfill complete: ${fetched} fetched, ${gone} gone/error, ${skipped} already present ===`,
+    `\n=== Backfill complete: ${fetched} fetched, ${gone} gone, ${errorIds.length} errors, ${skipped} skipped ===`,
   );
   if (goneIds.length) {
-    fs.writeFileSync('/tmp/dutch-backfill-gone.txt', goneIds.join('\n'), 'utf-8');
-    console.log(`gone ids written to /tmp/dutch-backfill-gone.txt`);
+    fs.writeFileSync(GONE_FILE, goneIds.join('\n'), 'utf-8');
+    console.log(`gone ids (verified absent upstream) written to ${GONE_FILE}`);
+  }
+  if (errorIds.length) {
+    fs.writeFileSync(ERROR_FILE, errorIds.join('\n'), 'utf-8');
+    console.error(
+      `${errorIds.length} id(s) FAILED (transport/parse) — written to ${ERROR_FILE}; ` +
+        'these are NOT gone upstream. Exiting non-zero.',
+    );
+    process.exitCode = 1;
   }
 }
 
-void main();
+main().catch((err) => {
+  console.error('Fatal error during backfill:', err);
+  process.exit(1);
+});

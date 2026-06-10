@@ -69,10 +69,25 @@ data_freshness:
 # Fix-Sweep rebuild contract (chassis corpus freshness automation, 2026-06-10 survey).
 # Schema: Ansvar-Architecture-Documentation/infrastructure/policy/rebuild-contract.schema.json
 # Runbook: Ansvar-Architecture-Documentation/docs/runbooks/fix-sweep.md
+#
+# ingest_cmd is the FULL freshness sweep: discovery refresh (newest-toestand
+# selection, refetch on changed/unprovable freshness) PLUS the per-id backfill
+# of the ~1,170 documents invisible to dcterms.type=wet discovery
+# (data/backfill-ids.txt). `npm run ingest` alone is additive-only and must
+# never be used as a staleness repair — it skips every existing seed.
+#
+# PRECONDITIONS for a fix-sweep run on this repo:
+#   - data/seed/ must be populated (not committed to git; build_cmd fails loud
+#     on an empty seed dir rather than building a 0-document database).
+#   - A first sweep after 2026-06-10 refetches the FULL corpus (pre-toestand
+#     stamps self-heal as refetch_unknown) and the backfill resolves ~1,170
+#     ids per-id over SRU: budget hours, not minutes. Set
+#     FIX_SWEEP_BUILD_TIMEOUT accordingly (default 1800s is too low for the
+#     first run; steady-state incremental runs fit comfortably).
 rebuild_contract:
   schema_version: '1.0'
   runnable: true
-  ingest_cmd: 'npm run ingest'
+  ingest_cmd: 'npm run ingest:sweep'
   build_cmd: 'npm run build:db'
   build_cwd: '.'
   premium_build_cmd: 'npm run build:db:paid'

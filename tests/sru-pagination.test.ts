@@ -80,3 +80,20 @@ describe('fetchPageWithRetry — custom health predicate', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('assertDiscoveryComplete — declared-total validation (PR #117 review fix)', () => {
+  // A glitched final page can declare a missing/garbage numberOfRecords; the
+  // gate must reject unusable totals instead of passing `found < NaN === false`.
+  it('throws when the declared total is null (no page declared a usable total)', () => {
+    expect(() => assertDiscoveryComplete(150, null)).toThrow(/total/i);
+  });
+
+  it('throws when the declared total is NaN', () => {
+    expect(() => assertDiscoveryComplete(150, Number.NaN)).toThrow(/total/i);
+  });
+
+  it('throws when the declared total is zero or negative', () => {
+    expect(() => assertDiscoveryComplete(150, 0)).toThrow(/total/i);
+    expect(() => assertDiscoveryComplete(150, -5)).toThrow(/total/i);
+  });
+});

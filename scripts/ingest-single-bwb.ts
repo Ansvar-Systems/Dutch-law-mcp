@@ -3,12 +3,21 @@
  * One-off targeted ingestion — fetches a small list of BWB IDs directly.
  *
  * Bypasses the SRU discovery phase (which enumerates ~24K records over
- * ~8 minutes) by going straight to BWB XML for specific known statutes.
- * Used to validate parser/ingest changes end-to-end before kicking off a
- * full unlimited run.
+ * ~8 minutes) by resolving each id individually: SRU id lookup → newest
+ * in-force toestand → fetch that XML. The un-versioned repository URL is
+ * never used (it 301-redirects to the OLDEST toestand). Used to validate
+ * parser/ingest changes end-to-end before kicking off a full unlimited run.
+ *
+ * Seeds are written through the shared builder, so they carry the same
+ * `_ingest` stamp (retrieved_at, sru_modified, toestand) as discovery seeds
+ * and the refresh policy can reason about them.
+ *
+ * Any id that fails (transport, parse, no provisions) is counted and the
+ * process exits non-zero — a validation run that fetched nothing must never
+ * look like a pass.
  *
  * Usage:
- *   tsx scripts/ingest-single-bwb.ts BWBR0040940 BWBR0001854 ...
+ *   tsx scripts/ingest-single-bwb.ts [--concurrency N] BWBR0040940 [BWBR... ...]
  *
  * Side-effect: writes data/seed/<bwbId>.json for each successful fetch.
  */
@@ -17,88 +26,56 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseBwbXml } from '../src/parsers/bwb-xml-parser.js';
+import { resolveNewestToestand } from '../src/ingest/sru-resolve.js';
+import { fetchWithRetry } from '../src/ingest/http-retry.js';
+import { buildSeed } from '../src/ingest/seed-writer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const SEED_DIR = path.resolve(__dirname, '..', 'data', 'seed');
-const BWB_XML_BASE = 'https://repository.officiele-overheidspublicaties.nl/bwb';
 
-interface SeedDoc {
-  id: string;
-  type: 'statute';
-  title: string;
-  status: string;
-  in_force_date?: string;
-  url: string;
-}
+async function fetchBwb(bwbId: string): Promise<boolean> {
+  console.log(`Resolving ${bwbId} via SRU id lookup`);
+  const today = new Date().toISOString().slice(0, 10);
 
-async function fetchWithRetry(url: string, maxAttempts = 4): Promise<Response | null> {
-  let lastErr: unknown;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const res = await fetch(url, { redirect: 'follow' });
-      if (res.ok) return res;
-      // Retry only on 5xx / 429 / network-class statuses
-      if (res.status >= 500 || res.status === 429) {
-        await new Promise((r) => setTimeout(r, 1000 * attempt));
-        continue;
-      }
-      // 4xx (except 429) — non-retryable
-      return res;
-    } catch (err) {
-      lastErr = err;
-      // Exponential-ish backoff: 1s, 2s, 4s, 8s
-      await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
-    }
+  const resolved = await resolveNewestToestand(bwbId, { today });
+  if (!resolved) {
+    console.error(`  ${bwbId}: no SRU records upstream — skipping`);
+    return false;
   }
-  console.error(`  Retries exhausted for ${url}: ${String(lastErr)}`);
-  return null;
-}
+  if (!resolved.toestandUrl) {
+    console.error(
+      `  ${bwbId}: SRU record carries no toestand URL — refusing the un-versioned URL (serves the oldest consolidation)`,
+    );
+    return false;
+  }
 
-async function fetchBwb(bwbId: string): Promise<void> {
-  const url = `${BWB_XML_BASE}/${bwbId}/xml/${bwbId}.xml`;
-  console.log(`Fetching ${bwbId} from ${url}`);
-
-  const res = await fetchWithRetry(url);
-  if (!res || !res.ok) {
-    console.error(`  HTTP ${res?.status ?? 'no-response'} — skipping`);
-    return;
+  console.log(`  Fetching toestand ${resolved.toestand ?? '?'} from ${resolved.toestandUrl}`);
+  const res = await fetchWithRetry(resolved.toestandUrl);
+  if (!res.ok) {
+    console.error(`  ${bwbId}: HTTP ${res.status} — skipping`);
+    return false;
   }
   const xml = await res.text();
   const parsed = parseBwbXml(xml);
   if (!parsed.bwb_id) {
-    console.error(`  No bwb_id parsed — skipping`);
-    return;
+    console.error(`  ${bwbId}: no bwb_id parsed — skipping`);
+    return false;
   }
   if (parsed.provisions.length === 0) {
-    console.error(`  No provisions — skipping`);
-    return;
+    console.error(`  ${bwbId}: no provisions — skipping`);
+    return false;
   }
 
-  const doc: SeedDoc = {
-    id: parsed.bwb_id,
-    type: 'statute',
+  const seedData = buildSeed({
+    bwbId: parsed.bwb_id,
     title: parsed.title,
-    status: 'in_force',
-    url: `https://wetten.overheid.nl/${parsed.bwb_id}`,
-  };
-  if (parsed.in_force_date) {
-    doc.in_force_date = parsed.in_force_date;
-  }
-
-  const seedData = {
-    documents: [doc],
-    provisions: parsed.provisions.map((p) => ({
-      document_id: parsed.bwb_id,
-      provision_ref: p.provision_ref,
-      book: p.book,
-      chapter: p.chapter,
-      section: p.section,
-      article: p.article,
-      title: p.title,
-      content: p.content,
-    })),
-  };
+    provisions: parsed.provisions,
+    in_force_date: parsed.in_force_date,
+    sruModified: resolved.modified,
+    toestand: resolved.toestand,
+    now: new Date().toISOString(),
+  });
 
   fs.mkdirSync(SEED_DIR, { recursive: true });
   const filePath = path.join(SEED_DIR, `${parsed.bwb_id}.json`);
@@ -106,6 +83,7 @@ async function fetchBwb(bwbId: string): Promise<void> {
   console.log(
     `  OK — wrote ${filePath} (${parsed.provisions.length} provisions, in_force_date=${parsed.in_force_date ?? '(none)'})`,
   );
+  return true;
 }
 
 async function main(): Promise<void> {
@@ -127,45 +105,64 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  let succeeded = 0;
+  let failed = 0;
+  const recordOutcome = (ok: boolean): void => {
+    if (ok) succeeded++;
+    else failed++;
+  };
+
   if (concurrency === 1) {
     for (const id of ids) {
-      await fetchBwb(id);
+      try {
+        recordOutcome(await fetchBwb(id));
+      } catch (err) {
+        console.error(`  FATAL ${id}: ${String(err)}`);
+        failed++;
+      }
       await new Promise((r) => setTimeout(r, 500));
     }
-    return;
+  } else {
+    // Worker-pool concurrency. Keep N inflight at once, push the next one
+    // into the queue as each finishes. Lets the long fetches/parses for
+    // big statutes (e.g. Wetboek van Strafrecht has 670+ provisions) overlap
+    // with smaller ones, cutting wall-clock time ~Nx for N concurrent workers.
+    const queue = [...ids];
+    let active = 0;
+    await new Promise<void>((resolve) => {
+      const spawn = (): void => {
+        if (queue.length === 0 && active === 0) {
+          resolve();
+          return;
+        }
+        while (active < concurrency && queue.length > 0) {
+          const id = queue.shift();
+          if (!id) break;
+          active++;
+          fetchBwb(id)
+            .then(recordOutcome)
+            .catch((err) => {
+              console.error(`  FATAL ${id}: ${String(err)}`);
+              failed++;
+            })
+            .finally(() => {
+              active--;
+              spawn();
+            });
+        }
+      };
+      spawn();
+    });
   }
 
-  // Worker-pool concurrency. Keep N inflight at once, push the next one
-  // into the queue as each finishes. Lets the long fetches/parses for
-  // big statutes (e.g. Wetboek van Strafrecht has 670+ provisions) overlap
-  // with smaller ones, cutting wall-clock time ~Nx for N concurrent workers.
-  const queue = [...ids];
-  let active = 0;
-  let done = 0;
-  await new Promise<void>((resolve) => {
-    const spawn = (): void => {
-      if (queue.length === 0 && active === 0) {
-        resolve();
-        return;
-      }
-      while (active < concurrency && queue.length > 0) {
-        const id = queue.shift();
-        if (!id) break;
-        active++;
-        fetchBwb(id)
-          .catch((err) => {
-            console.error(`  FATAL ${id}: ${String(err)}`);
-          })
-          .finally(() => {
-            active--;
-            done++;
-            spawn();
-          });
-      }
-    };
-    spawn();
-  });
-  console.log(`Done: ${done} fetched (${ids.length} requested)`);
+  console.log(`Done: ${succeeded} fetched, ${failed} failed (${ids.length} requested)`);
+  if (failed > 0) {
+    console.error('One or more ids failed — exiting non-zero.');
+    process.exitCode = 1;
+  }
 }
 
-void main();
+main().catch((err) => {
+  console.error('Fatal error during single-id ingestion:', err);
+  process.exit(1);
+});

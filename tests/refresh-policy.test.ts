@@ -40,12 +40,12 @@ describe('decideFetch — refresh mode', () => {
     ).toBe('refetch_changed');
   });
 
-  it('skips when the stored stamp is at least as new as upstream', () => {
+  it('skips when the stored stamp matches upstream and the fetch postdates the modified day', () => {
     expect(
       decideFetch({
         seedExists: true,
         refresh: true,
-        existingMeta: { sru_modified: '2026-05-02' },
+        existingMeta: { sru_modified: '2026-05-02', retrieved_at: '2026-05-03T06:00:00Z' },
         sruModified: '2026-05-02',
       }),
     ).toBe('skip_current');
@@ -85,19 +85,141 @@ describe('decideFetch — refresh mode', () => {
   });
 });
 
+describe('decideFetch — toestand-keyed refresh (PR #117 review fix)', () => {
+  // The toestand version is the content identity of a consolidation. OWMS
+  // `modified` is document-level and identical across all toestand records of
+  // a statute, so it cannot distinguish "we hold the newest consolidation"
+  // from "we hold the 2002 one" — exactly the defect that pinned the deployed
+  // Criminal Code to its 2002-04-01 state while stamped as current.
+  it('refetches when upstream offers a newer toestand than the stored stamp', () => {
+    expect(
+      decideFetch({
+        seedExists: true,
+        refresh: true,
+        existingMeta: { sru_modified: '2025-01-09', toestand: '2002-01-01_0' },
+        sruModified: '2025-01-09',
+        upstreamToestand: '2026-06-04_0',
+      }),
+    ).toBe('refetch_changed');
+  });
+
+  it('skips when the stored toestand equals the upstream one', () => {
+    expect(
+      decideFetch({
+        seedExists: true,
+        refresh: true,
+        existingMeta: { sru_modified: '2025-01-09', toestand: '2026-06-04_0' },
+        sruModified: '2025-01-09',
+        upstreamToestand: '2026-06-04_0',
+      }),
+    ).toBe('skip_current');
+  });
+
+  it('refetches seeds with no toestand stamp (pre-fix seeds self-heal)', () => {
+    expect(
+      decideFetch({
+        seedExists: true,
+        refresh: true,
+        existingMeta: { sru_modified: '2025-01-09' },
+        sruModified: '2025-01-09',
+        upstreamToestand: '2026-06-04_0',
+      }),
+    ).toBe('refetch_unknown');
+  });
+
+  it('refetches when upstream offers only an OLDER toestand than stored (inconsistent state)', () => {
+    expect(
+      decideFetch({
+        seedExists: true,
+        refresh: true,
+        existingMeta: { sru_modified: '2025-01-09', toestand: '2026-06-04_0' },
+        sruModified: '2025-01-09',
+        upstreamToestand: '2019-01-01_0',
+      }),
+    ).toBe('refetch_unknown');
+  });
+
+  it('prefers same-date higher sequence numbers (same-day re-issue)', () => {
+    expect(
+      decideFetch({
+        seedExists: true,
+        refresh: true,
+        existingMeta: { toestand: '2026-01-01_0' },
+        upstreamToestand: '2026-01-01_1',
+      }),
+    ).toBe('refetch_changed');
+  });
+
+  it('falls back to sru_modified comparison when upstream has no toestand', () => {
+    expect(
+      decideFetch({
+        seedExists: true,
+        refresh: true,
+        existingMeta: { sru_modified: '2026-01-15', toestand: '2020-01-01_0' },
+        sruModified: '2026-05-02',
+        upstreamToestand: null,
+      }),
+    ).toBe('refetch_changed');
+  });
+});
+
+describe('decideFetch — same-day window on the sru_modified fallback', () => {
+  // OWMS `modified` is date-granularity. A statute fetched on the same calendar
+  // day it was modified can be modified AGAIN later that day without the date
+  // changing — equality alone must not prove freshness for such seeds.
+  it('refetches on equal dates when the seed was retrieved on (or before) the modified day', () => {
+    expect(
+      decideFetch({
+        seedExists: true,
+        refresh: true,
+        existingMeta: { sru_modified: '2026-06-15', retrieved_at: '2026-06-15T09:00:00Z' },
+        sruModified: '2026-06-15',
+      }),
+    ).toBe('refetch_unknown');
+  });
+
+  it('skips on equal dates when the seed was retrieved after the modified day ended', () => {
+    expect(
+      decideFetch({
+        seedExists: true,
+        refresh: true,
+        existingMeta: { sru_modified: '2026-06-15', retrieved_at: '2026-06-16T09:00:00Z' },
+        sruModified: '2026-06-15',
+      }),
+    ).toBe('skip_current');
+  });
+
+  it('refetches on equal dates when retrieved_at is missing (window unprovable)', () => {
+    expect(
+      decideFetch({
+        seedExists: true,
+        refresh: true,
+        existingMeta: { sru_modified: '2026-06-15' },
+        sruModified: '2026-06-15',
+      }),
+    ).toBe('refetch_unknown');
+  });
+});
+
 describe('stampIngestMeta', () => {
-  it('stamps retrieved_at and sru_modified onto the seed', () => {
+  it('stamps retrieved_at, sru_modified and toestand onto the seed', () => {
     const seed = { bwb_id: 'BWBR0001821', provisions: [] };
-    const out = stampIngestMeta(seed, { sruModified: '2026-05-02', now: '2026-06-10T08:00:00Z' });
+    const out = stampIngestMeta(seed, {
+      sruModified: '2026-05-02',
+      toestand: '2026-06-04_0',
+      now: '2026-06-10T08:00:00Z',
+    });
     expect(out._ingest).toEqual({
       retrieved_at: '2026-06-10T08:00:00Z',
       sru_modified: '2026-05-02',
+      toestand: '2026-06-04_0',
     });
     expect(out.bwb_id).toBe('BWBR0001821');
   });
 
-  it('stores null when upstream offered no modified date', () => {
+  it('stores null when upstream offered no modified date and no toestand', () => {
     const out = stampIngestMeta({}, { sruModified: null, now: '2026-06-10T08:00:00Z' });
     expect(out._ingest.sru_modified).toBeNull();
+    expect(out._ingest.toestand).toBeNull();
   });
 });

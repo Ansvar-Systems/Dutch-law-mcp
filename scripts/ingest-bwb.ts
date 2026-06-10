@@ -3,19 +3,36 @@
  * BWB (Basiswettenbestand) ingestion script.
  *
  * Discovers statutes via the SRU search service at zoekservice.overheid.nl,
- * fetches the "toestand" XML for each BWB-ID, parses it with the BWB XML
- * parser, and writes seed JSON files to data/seed/.
+ * selects the NEWEST in-force toestand (consolidation) per statute, fetches
+ * its XML, parses it with the BWB XML parser, and writes seed JSON files to
+ * data/seed/.
  *
- * Usage: npm run ingest
+ * Toestand selection matters: SRU returns one record per toestand of a
+ * statute, ordered OLDEST-FIRST, and the repository's un-versioned XML URL
+ * 301-redirects to the oldest toestand. The pre-2026-06-10 "first occurrence"
+ * dedup therefore pinned the corpus to the oldest consolidation (the deployed
+ * Criminal Code was its 2002-04-01 state). See src/ingest/toestand.ts.
+ *
+ * Usage: npm run ingest            (additive: only statutes without a seed)
+ *        npm run ingest:refresh    (also refetch statutes whose newest
+ *                                   toestand differs from the seed's stamp,
+ *                                   or whose freshness cannot be proven)
  */
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { XMLParser } from 'fast-xml-parser';
 import { parseBwbXml } from '../src/parsers/bwb-xml-parser.js';
-import { decideFetch, stampIngestMeta, type SeedIngestMeta } from '../src/ingest/refresh-policy.js';
+import { decideFetch, type SeedIngestMeta } from '../src/ingest/refresh-policy.js';
 import { fetchPageWithRetry, assertDiscoveryComplete } from '../src/ingest/sru-pagination.js';
+import { parseSruResponse, type SruDocRecord } from '../src/ingest/sru-response.js';
+import {
+  selectCurrentToestandRecord,
+  parseToestandFromUrl,
+  toestandKey,
+} from '../src/ingest/toestand.js';
+import { resolveNewestToestand } from '../src/ingest/sru-resolve.js';
+import { buildSeed } from '../src/ingest/seed-writer.js';
 
 // ---------------------------------------------------------------------------
 // Paths
@@ -34,43 +51,25 @@ const SRU_BASE = 'https://zoekservice.overheid.nl/sru/Search';
 const SRU_QUERY = 'dcterms.type=wet';
 const SRU_PAGE_SIZE = 50;
 
-const BWB_XML_BASE = 'https://repository.officiele-overheidspublicaties.nl/bwb';
-
 const RATE_LIMIT_MS = 2000;
 
-// --refresh: refetch statutes whose upstream OWMS modified date is newer than the
-// seed's _ingest stamp (or whose freshness cannot be proven). Default stays additive-only.
+// --refresh: refetch statutes whose newest upstream toestand differs from the
+// seed's _ingest stamp (or whose freshness cannot be proven). Default stays
+// additive-only.
 const REFRESH = process.argv.includes('--refresh');
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function toArray<T>(val: T | T[] | undefined | null): T[] {
-  if (val == null) return [];
-  return Array.isArray(val) ? val : [val];
-}
-
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-interface SRURecord {
-  bwbId: string;
-  title: string;
-  toestandUrl?: string;
-  modified?: string | null;
-}
-
 /**
- * Fetch a single page from the SRU service and return records + next position.
+ * Fetch a single page from the SRU service and return parsed records.
  */
-async function fetchSRUPage(startRecord: number): Promise<{
-  records: SRURecord[];
-  rawCount: number;
-  totalRecords: number;
-  nextRecordPosition: number | null;
-}> {
+async function fetchSRUPage(startRecord: number) {
   const url = new URL(SRU_BASE);
   url.searchParams.set('operation', 'searchRetrieve');
   url.searchParams.set('version', '1.2');
@@ -86,120 +85,17 @@ async function fetchSRUPage(startRecord: number): Promise<{
     throw new Error(`SRU request failed: ${response.status} ${response.statusText}`);
   }
 
-  const xml = await response.text();
-  const parser = new XMLParser({
-    ignoreAttributes: false,
-    attributeNamePrefix: '@_',
-    removeNSPrefix: true,
-  });
-
-  const doc = parser.parse(xml) as Record<string, unknown>;
-  const searchRetrieveResponse = doc['searchRetrieveResponse'] as
-    | Record<string, unknown>
-    | undefined;
-
-  if (!searchRetrieveResponse) {
-    return { records: [], rawCount: 0, totalRecords: 0, nextRecordPosition: null };
-  }
-
-  const totalRecords = Number(searchRetrieveResponse['numberOfRecords'] ?? 0);
-  const nextPos = searchRetrieveResponse['nextRecordPosition'];
-  const nextRecordPosition = nextPos != null ? Number(nextPos) : null;
-
-  const recordsContainer = searchRetrieveResponse['records'] as Record<string, unknown> | undefined;
-  if (!recordsContainer) {
-    return { records: [], rawCount: 0, totalRecords, nextRecordPosition: null };
-  }
-
-  const rawRecords = toArray(recordsContainer['record']);
-  const records: SRURecord[] = [];
-
-  for (const rawRecord of rawRecords) {
-    if (rawRecord == null || typeof rawRecord !== 'object') continue;
-    const rec = rawRecord as Record<string, unknown>;
-
-    const recordData = rec['recordData'] as Record<string, unknown> | undefined;
-    if (!recordData) continue;
-
-    // Extract BWB-ID from the SRU metadata
-    // Structure: recordData > gzd > originalData > meta > owmskern > identifier
-    const gzd = recordData['gzd'] as Record<string, unknown> | undefined;
-    const originalData = gzd?.['originalData'] as Record<string, unknown> | undefined;
-    const enrichedData = gzd?.['enrichedData'] as Record<string, unknown> | undefined;
-
-    let bwbId = '';
-    let title = '';
-    let toestandUrl: string | undefined;
-    let modified: string | null = null;
-
-    if (originalData) {
-      // The SRU response wraps owmskern inside overheidbwb:meta (becomes 'meta' after NS removal)
-      const meta = originalData['meta'] as Record<string, unknown> | undefined;
-      const owmsKern = (meta?.['owmskern'] ??
-        originalData['owmskern'] ??
-        originalData['owms-kern']) as Record<string, unknown> | undefined;
-
-      if (owmsKern) {
-        const identifier = owmsKern['identifier'];
-        if (typeof identifier === 'string') {
-          const match = identifier.match(/BWB[RV]\d+/);
-          if (match) bwbId = match[0];
-        } else if (identifier && typeof identifier === 'object') {
-          const idText = (identifier as Record<string, unknown>)['#text'];
-          const idStr = typeof idText === 'string' ? idText : '';
-          const match = idStr.match(/BWB[RV]\d+/);
-          if (match) bwbId = match[0];
-        }
-
-        const titleNode = owmsKern['title'];
-        if (typeof titleNode === 'string') {
-          title = titleNode;
-        } else if (titleNode && typeof titleNode === 'object') {
-          const titleText = (titleNode as Record<string, unknown>)['#text'];
-          title = typeof titleText === 'string' ? titleText : '';
-        }
-
-        const modifiedNode = owmsKern['modified'];
-        if (typeof modifiedNode === 'string') {
-          modified = modifiedNode;
-        } else if (modifiedNode && typeof modifiedNode === 'object') {
-          const modText = (modifiedNode as Record<string, unknown>)['#text'];
-          modified = typeof modText === 'string' ? modText : null;
-        }
-      }
-    }
-
-    // Get the toestand URL from enrichedData (has the correct date-versioned path)
-    if (enrichedData) {
-      const locatie = enrichedData['locatie_toestand'];
-      if (typeof locatie === 'string') {
-        toestandUrl = locatie;
-      }
-
-      // Fallback: extract BWB-ID from enriched data
-      if (!bwbId) {
-        const locStr = typeof locatie === 'string' ? locatie : '';
-        const match = locStr.match(/BWB[RV]\d+/);
-        if (match) bwbId = match[0];
-      }
-    }
-
-    if (bwbId) {
-      records.push({ bwbId, title, toestandUrl, modified });
-    }
-  }
-
-  return { records, rawCount: rawRecords.length, totalRecords, nextRecordPosition };
+  return parseSruResponse(await response.text());
 }
 
 /**
  * Fetch the toestand XML for a BWB-ID and parse it into provisions.
- * If a toestandUrl is provided (from SRU enrichedData), use that directly.
- * Otherwise, fall back to the generic URL pattern.
+ * The toestand URL is REQUIRED here: the un-versioned repository URL
+ * 301-redirects to the oldest toestand and must never be used as a fallback.
  */
 async function fetchAndParseBWB(
   bwbId: string,
-  toestandUrl?: string,
+  toestandUrl: string,
 ): Promise<{
   title: string;
   in_force_date?: string;
@@ -213,10 +109,8 @@ async function fetchAndParseBWB(
     content: string;
   }>;
 } | null> {
-  const xmlUrl = toestandUrl ?? `${BWB_XML_BASE}/${bwbId}/xml/${bwbId}.xml`;
-
   try {
-    const response = await fetch(xmlUrl);
+    const response = await fetch(toestandUrl);
     if (!response.ok) {
       console.warn(`  WARNING: Failed to fetch XML for ${bwbId}: ${response.status}`);
       return null;
@@ -251,33 +145,17 @@ function writeSeedFile(
     title?: string;
     content: string;
   }>,
-  options: { in_force_date?: string; sruModified?: string | null } = {},
+  options: { in_force_date?: string; sruModified?: string | null; toestand?: string | null } = {},
 ): void {
-  const seedData = stampIngestMeta(
-    {
-      documents: [
-        {
-          id: bwbId,
-          type: 'statute' as const,
-          title,
-          status: 'in_force',
-          ...(options.in_force_date ? { in_force_date: options.in_force_date } : {}),
-          url: `https://wetten.overheid.nl/${bwbId}`,
-        },
-      ],
-      provisions: provisions.map((p) => ({
-        document_id: bwbId,
-        provision_ref: p.provision_ref,
-        book: p.book,
-        chapter: p.chapter,
-        section: p.section,
-        article: p.article,
-        title: p.title,
-        content: p.content,
-      })),
-    },
-    { sruModified: options.sruModified ?? null, now: new Date().toISOString() },
-  );
+  const seedData = buildSeed({
+    bwbId,
+    title,
+    provisions,
+    in_force_date: options.in_force_date,
+    sruModified: options.sruModified ?? null,
+    toestand: options.toestand ?? null,
+    now: new Date().toISOString(),
+  });
 
   const filePath = path.join(SEED_DIR, `${bwbId}.json`);
   fs.writeFileSync(filePath, JSON.stringify(seedData, null, 2), 'utf-8');
@@ -298,24 +176,29 @@ async function main(): Promise<void> {
 
   // 1. Discover all BWB-IDs via SRU pagination
   console.log('Phase 1: Discovering statutes via SRU...');
-  const allRecords: SRURecord[] = [];
+  const allRecords: SruDocRecord[] = [];
   let startRecord = 1;
-  let totalRecords = 0;
+  let declaredTotal: number | null = null;
 
   let rawFound = 0;
   while (true) {
     // Retry transient broken pages with backoff; a persistently broken page
     // fails LOUD — never treated as end-of-pagination (2026-06-10 truncation).
-    // Health = RAW record count, so a page whose IDs fail extraction is also
-    // loud, and a healthy page whose records were filtered never looks broken.
+    // Health requires raw records AND zero extraction drops, so a page whose
+    // IDs fail extraction is also loud, and a healthy page whose records were
+    // merely deduplicated downstream never looks broken.
     const p = await fetchPageWithRetry(fetchSRUPage, startRecord, {
-      isHealthy: (page) => page.rawCount > 0,
+      isHealthy: (page) => page.rawCount > 0 && page.droppedCount === 0,
     });
-    totalRecords = p.totalRecords;
+    // A glitched final page can omit numberOfRecords; keep the largest usable
+    // declaration instead of letting the last page overwrite it.
+    if (p.totalRecords != null && (declaredTotal == null || p.totalRecords > declaredTotal)) {
+      declaredTotal = p.totalRecords;
+    }
     rawFound += p.rawCount;
     allRecords.push(...p.records);
 
-    console.log(`  Found ${rawFound} / ${totalRecords} records`);
+    console.log(`  Found ${rawFound} / ${declaredTotal ?? '?'} records`);
 
     if (p.nextRecordPosition == null) {
       break;
@@ -325,19 +208,29 @@ async function main(): Promise<void> {
     await sleep(RATE_LIMIT_MS);
   }
 
-  // A discovery that ends short of the declared total is an error, not a result.
-  assertDiscoveryComplete(rawFound, totalRecords);
+  // A discovery that ends short of the declared total (or with no usable
+  // declared total at all) is an error, not a result.
+  assertDiscoveryComplete(rawFound, declaredTotal);
 
   console.log(`Discovered ${allRecords.length} toestand records.`);
 
-  // Deduplicate by BWB-ID, keeping the first occurrence (SRU returns multiple toestand versions per statute)
-  const seenBwbIds = new Map<string, SRURecord>();
+  // Group records per BWB-ID and select the NEWEST in-force toestand for each
+  // (SRU returns the full toestand history per statute, oldest first).
+  const byBwbId = new Map<string, SruDocRecord[]>();
   for (const record of allRecords) {
-    if (!seenBwbIds.has(record.bwbId)) {
-      seenBwbIds.set(record.bwbId, record);
+    const group = byBwbId.get(record.bwbId);
+    if (group) {
+      group.push(record);
+    } else {
+      byBwbId.set(record.bwbId, [record]);
     }
   }
-  const uniqueRecords = Array.from(seenBwbIds.values());
+  const today = new Date().toISOString().slice(0, 10);
+  const uniqueRecords: SruDocRecord[] = [];
+  for (const group of byBwbId.values()) {
+    const chosen = selectCurrentToestandRecord(group, today);
+    if (chosen) uniqueRecords.push(chosen);
+  }
   console.log(`Unique statutes: ${uniqueRecords.length}`);
   console.log();
 
@@ -362,11 +255,13 @@ async function main(): Promise<void> {
         existingMeta = null; // unreadable seed -> freshness unprovable -> refetch
       }
     }
+    const recordVersion = parseToestandFromUrl(record.toestandUrl);
     const decision = decideFetch({
       seedExists,
       refresh: REFRESH,
       existingMeta,
       sruModified: record.modified,
+      upstreamToestand: recordVersion ? toestandKey(recordVersion) : null,
     });
 
     if (decision === 'skip_existing' || decision === 'skip_current') {
@@ -379,12 +274,36 @@ async function main(): Promise<void> {
 
     console.log(`  [${i + 1}/${uniqueRecords.length}] ${record.bwbId} — ${decision}, fetching...`);
 
-    const result = await fetchAndParseBWB(record.bwbId, record.toestandUrl);
+    // The discovery record usually carries the toestand URL. When it does
+    // not, resolve it per id — NEVER fall back to the un-versioned URL, which
+    // redirects to the oldest toestand.
+    let toestandUrl = record.toestandUrl ?? null;
+    let toestand = recordVersion ? toestandKey(recordVersion) : null;
+    if (!toestandUrl) {
+      try {
+        const resolved = await resolveNewestToestand(record.bwbId, { today });
+        toestandUrl = resolved?.toestandUrl ?? null;
+        toestand = resolved?.toestand ?? null;
+      } catch (err) {
+        console.warn(`    WARNING: toestand resolution failed: ${String(err)}`);
+      }
+      if (!toestandUrl) {
+        console.warn(
+          `    ERROR: no toestand URL for ${record.bwbId} — refusing the un-versioned URL (serves the oldest consolidation)`,
+        );
+        errorCount++;
+        await sleep(RATE_LIMIT_MS);
+        continue;
+      }
+    }
+
+    const result = await fetchAndParseBWB(record.bwbId, toestandUrl);
 
     if (result && result.provisions.length > 0) {
       writeSeedFile(record.bwbId, result.title || record.title, result.provisions, {
         in_force_date: result.in_force_date,
         sruModified: record.modified ?? null,
+        toestand,
       });
       console.log(`    Parsed ${result.provisions.length} provisions`);
       successCount++;
@@ -402,6 +321,14 @@ async function main(): Promise<void> {
   console.log('=== BWB Ingestion Complete ===');
   console.log(`  Success: ${successCount}`);
   console.log(`  Errors:  ${errorCount}`);
+
+  if (errorCount > 0) {
+    // Machine-readable failure: the fix-sweep rebuild contract (sources.yml)
+    // runs this script and reads the exit code. A run with failed statutes is
+    // a partial run — it must never look like a clean rebuild input.
+    console.error(`${errorCount} statute(s) failed to fetch/parse — exiting non-zero.`);
+    process.exitCode = 1;
+  }
 }
 
 main().catch((err) => {

@@ -55,7 +55,16 @@ export async function fetchPageWithRetry<P extends SruPage<unknown>>(
   );
 }
 
-export function assertDiscoveryComplete(found: number, declaredTotal: number): void {
+export function assertDiscoveryComplete(found: number, declaredTotal: number | null): void {
+  // A glitched page can declare a missing/garbage numberOfRecords. `found <
+  // NaN` is false, so an unusable total would wave a truncated worklist
+  // through — reject it before comparing.
+  if (declaredTotal == null || !Number.isInteger(declaredTotal) || declaredTotal <= 0) {
+    throw new Error(
+      `SRU discovery declared no usable total (got ${declaredTotal}). ` +
+        'Refusing to validate completeness against a missing or malformed numberOfRecords.',
+    );
+  }
   if (found < declaredTotal) {
     throw new Error(
       `SRU discovery ended with ${found} records but the service declared ${declaredTotal}. ` +
