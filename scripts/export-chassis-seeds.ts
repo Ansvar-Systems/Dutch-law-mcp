@@ -15,7 +15,12 @@
  *   - any skip or orphan removal exits non-zero so a pipeline cannot treat a
  *     shrunken export as a clean input.
  *
- * Usage: tsx scripts/export-chassis-seeds.ts [outDir]
+ * Safety: refuses an empty/missing seed dir outright (an empty seed dir +
+ * orphan removal would wipe OUT_DIR), and refuses bulk orphan removal beyond
+ * a small fraction of the produced set without --prune (fat-finger guard for
+ * the operator-supplied outDir).
+ *
+ * Usage: tsx scripts/export-chassis-seeds.ts [outDir] [--prune]
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -24,9 +29,22 @@ import { toChassisSeed, droppedProvisionRefs } from '../src/ingest/chassis-seed-
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SEED_DIR = path.resolve(__dirname, '..', 'data', 'seed');
-const OUT_DIR = path.resolve(
-  process.argv[2] ?? path.resolve(__dirname, '..', 'data', 'chassis-seed'),
-);
+const args = process.argv.slice(2).filter((a) => a !== '--prune');
+const PRUNE = process.argv.includes('--prune');
+const OUT_DIR = path.resolve(args[0] ?? path.resolve(__dirname, '..', 'data', 'chassis-seed'));
+
+const seedFiles = fs.existsSync(SEED_DIR)
+  ? fs
+      .readdirSync(SEED_DIR)
+      .filter((x) => x.startsWith('BWB') && x.endsWith('.json'))
+      .sort()
+  : [];
+if (seedFiles.length === 0) {
+  console.error(
+    `No seeds found in ${SEED_DIR} — refusing to export (and orphan-clean) from an empty seed dir.`,
+  );
+  process.exit(2);
+}
 
 fs.mkdirSync(OUT_DIR, { recursive: true });
 let ok = 0;
@@ -34,14 +52,13 @@ let skipped = 0;
 let droppedProvisionCount = 0;
 const produced = new Set<string>();
 
-for (const f of fs
-  .readdirSync(SEED_DIR)
-  .filter((x) => x.startsWith('BWB') && x.endsWith('.json'))
-  .sort()) {
-  const raw = JSON.parse(fs.readFileSync(path.join(SEED_DIR, f), 'utf-8')) as Parameters<
-    typeof toChassisSeed
-  >[0];
+for (const f of seedFiles) {
   try {
+    // Parse INSIDE the try: an unreadable seed must be a named SKIP, not an
+    // anonymous crash that aborts the audit and the orphan pass.
+    const raw = JSON.parse(fs.readFileSync(path.join(SEED_DIR, f), 'utf-8')) as Parameters<
+      typeof toChassisSeed
+    >[0];
     const dropped = droppedProvisionRefs(raw);
     if (dropped.length > 0) {
       droppedProvisionCount += dropped.length;
@@ -66,10 +83,22 @@ for (const f of fs
 
 // Remove output files this run did not produce: their seed was deleted or no
 // longer exports. Leaving them would feed the previous run's text to the
-// translator as if it were current.
+// translator as if it were current. Bulk removal needs --prune: a mostly-empty
+// seed dir pointed at a populated OUT_DIR must not silently wipe it.
+const orphanFiles = fs
+  .readdirSync(OUT_DIR)
+  .filter((x) => x.endsWith('.json'))
+  .filter((f) => !produced.has(f));
 let orphans = 0;
-for (const f of fs.readdirSync(OUT_DIR).filter((x) => x.endsWith('.json'))) {
-  if (!produced.has(f)) {
+const orphanCap = Math.max(50, Math.ceil(produced.size * 0.05));
+if (orphanFiles.length > orphanCap && !PRUNE) {
+  console.error(
+    `REFUSING orphan removal: ${orphanFiles.length} orphans exceed the safety cap of ${orphanCap} ` +
+      `(5% of ${produced.size} produced). If this shrink is intended, re-run with --prune.`,
+  );
+  process.exitCode = 1;
+} else {
+  for (const f of orphanFiles) {
     fs.unlinkSync(path.join(OUT_DIR, f));
     process.stderr.write(`ORPHAN ${f}: removed (not produced by this run)\n`);
     orphans++;
@@ -81,10 +110,10 @@ console.log(
     `(${skipped} skipped, ${droppedProvisionCount} provisions dropped, ${orphans} orphans removed)`,
 );
 
-if (skipped > 0 || orphans > 0) {
+if (skipped > 0 || orphans > 0 || droppedProvisionCount > 0) {
   console.error(
-    'Export shrank relative to the seed set (skips and/or orphan removals) — exiting non-zero; ' +
-      'audit the stderr enumeration before building a corpus from this output.',
+    'Export shrank relative to the seed set (skips, orphan removals and/or dropped provisions) — ' +
+      'exiting non-zero; audit the stderr enumeration before building a corpus from this output.',
   );
   process.exitCode = 1;
 }

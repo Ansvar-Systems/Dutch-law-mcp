@@ -62,6 +62,10 @@ async function fetchBwb(bwbId: string): Promise<boolean> {
     console.error(`  ${bwbId}: no bwb_id parsed — skipping`);
     return false;
   }
+  if (parsed.bwb_id !== bwbId) {
+    console.error(`  ${bwbId}: body identity mismatch — server returned ${parsed.bwb_id}`);
+    return false;
+  }
   if (parsed.provisions.length === 0) {
     console.error(`  ${bwbId}: no provisions — skipping`);
     return false;
@@ -72,6 +76,7 @@ async function fetchBwb(bwbId: string): Promise<boolean> {
     title: parsed.title,
     provisions: parsed.provisions,
     in_force_date: parsed.in_force_date,
+    status: resolved.status,
     sruModified: resolved.modified,
     toestand: resolved.toestand,
     now: new Date().toISOString(),

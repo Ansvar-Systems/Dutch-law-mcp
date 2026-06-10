@@ -51,16 +51,60 @@ describe('resolveNewestToestand', () => {
     expect(await resolveNewestToestand('BWBR9999999', { fetchImpl })).toBeNull();
   });
 
-  it('throws on an HTTP failure instead of soft-failing (transient != gone)', async () => {
+  it('throws on a persistent HTTP failure instead of soft-failing (transient != gone)', async () => {
     const fetchImpl = vi
       .fn()
       .mockResolvedValue({ ok: false, status: 503, text: () => Promise.resolve('') });
-    await expect(resolveNewestToestand('BWBR0001854', { fetchImpl })).rejects.toThrow(/503/);
+    await expect(
+      resolveNewestToestand('BWBR0001854', { fetchImpl, backoffMs: [0, 0, 0] }),
+    ).rejects.toThrow(/503/);
+    expect(fetchImpl.mock.calls.length).toBeGreaterThan(1); // retried before throwing
   });
 
   it('throws when the declared total exceeds the returned records (truncated page)', async () => {
     const body = sruXml(2000, [rec('BWBR0001854', '2002-04-01_0')]);
     const fetchImpl = vi.fn().mockResolvedValue(okResponse(body));
     await expect(resolveNewestToestand('BWBR0001854', { fetchImpl })).rejects.toThrow(/2000/);
+  });
+});
+
+describe('resolveNewestToestand — round-2 hardening (delta review)', () => {
+  it('retries transient HTTP failures before throwing (resolution is a hot path)', async () => {
+    const body = sruXml(1, [rec('BWBR0001854', '2026-01-01_0')]);
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 503, text: () => Promise.resolve('') })
+      .mockResolvedValueOnce(okResponse(body));
+    const out = await resolveNewestToestand('BWBR0001854', {
+      fetchImpl,
+      today: '2026-06-10',
+      backoffMs: [0, 0, 0],
+    });
+    expect(out?.toestand).toBe('2026-01-01_0');
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports status repealed when the newest toestand has a past validity end', async () => {
+    const xml = `<?xml version="1.0"?>
+<srw:searchRetrieveResponse xmlns:srw="http://www.loc.gov/zing/srw/">
+  <srw:numberOfRecords>1</srw:numberOfRecords>
+  <srw:records><srw:record><srw:recordData><gzd xmlns:dcterms="http://purl.org/dc/terms/" xmlns:overheidbwb="http://standaarden.overheid.nl/bwb/terms/">
+    <originalData><overheidbwb:meta>
+      <owmskern><dcterms:identifier>BWBR0002024</dcterms:identifier><dcterms:title>Oud besluit</dcterms:title><dcterms:modified>2017-01-01</dcterms:modified></owmskern>
+      <bwbipm><overheidbwb:geldigheidsperiode_einddatum>2007-01-31</overheidbwb:geldigheidsperiode_einddatum></bwbipm>
+    </overheidbwb:meta></originalData>
+    <enrichedData><overheidbwb:locatie_toestand>https://repository.officiele-overheidspublicaties.nl/bwb/BWBR0002024/1997-12-24_0/xml/BWBR0002024_1997-12-24_0.xml</overheidbwb:locatie_toestand></enrichedData>
+  </gzd></srw:recordData></srw:record></srw:records>
+</srw:searchRetrieveResponse>`;
+    const fetchImpl = vi.fn().mockResolvedValue(okResponse(xml));
+    const out = await resolveNewestToestand('BWBR0002024', { fetchImpl, today: '2026-06-10' });
+    expect(out?.status).toBe('repealed');
+  });
+
+  it('reports status in_force when the newest toestand has no past validity end', async () => {
+    const body = sruXml(1, [rec('BWBR0001854', '2026-01-01_0')]);
+    const fetchImpl = vi.fn().mockResolvedValue(okResponse(body));
+    const out = await resolveNewestToestand('BWBR0001854', { fetchImpl, today: '2026-06-10' });
+    expect(out?.status).toBe('in_force');
   });
 });

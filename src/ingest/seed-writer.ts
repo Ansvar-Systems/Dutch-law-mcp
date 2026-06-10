@@ -25,6 +25,8 @@ export function buildSeed(opts: {
   title: string;
   provisions: SeedProvisionInput[];
   in_force_date?: string;
+  /** Document status, a FACT from upstream validity metadata; defaults to in_force. */
+  status?: 'in_force' | 'repealed';
   sruModified: string | null;
   toestand: string | null;
   now: string;
@@ -40,7 +42,7 @@ export function buildSeed(opts: {
           id: opts.bwbId,
           type: 'statute' as const,
           title: opts.title,
-          status: 'in_force',
+          status: opts.status ?? 'in_force',
           ...(opts.in_force_date ? { in_force_date: opts.in_force_date } : {}),
           url: `https://wetten.overheid.nl/${opts.bwbId}`,
         },

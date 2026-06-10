@@ -63,3 +63,33 @@ describe('buildSeed', () => {
     expect(seed._ingest.toestand).toBeNull();
   });
 });
+
+describe('buildSeed — status (delta review)', () => {
+  // status must be a fact, not a constant: expired instruments (e.g.
+  // BWBR0002024, validity ended 2007-01-31) must not carry an affirmative
+  // in_force claim into the repealed-demotion ranking.
+  it('accepts an explicit status', () => {
+    const seed = buildSeed({
+      bwbId: 'BWBR0002024',
+      title: 'Oud besluit',
+      provisions: [{ provision_ref: '1', article: '1', content: 'T.' }],
+      status: 'repealed',
+      sruModified: null,
+      toestand: '1997-12-24_0',
+      now: '2026-06-10T12:00:00Z',
+    });
+    expect(seed.documents[0].status).toBe('repealed');
+  });
+
+  it('defaults to in_force when no status is given', () => {
+    const seed = buildSeed({
+      bwbId: 'BWBR0000001',
+      title: 'T',
+      provisions: [{ provision_ref: '1', article: '1', content: 'T.' }],
+      sruModified: null,
+      toestand: null,
+      now: '2026-06-10T12:00:00Z',
+    });
+    expect(seed.documents[0].status).toBe('in_force');
+  });
+});

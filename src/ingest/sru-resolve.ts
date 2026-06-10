@@ -16,6 +16,7 @@
 
 import { parseSruResponse } from './sru-response.js';
 import { selectCurrentToestandRecord, parseToestandFromUrl, toestandKey } from './toestand.js';
+import { fetchWithRetry } from './http-retry.js';
 
 const SRU_BASE = 'https://zoekservice.overheid.nl/sru/Search';
 const SRU_ID_PAGE_SIZE = 1000;
@@ -29,6 +30,12 @@ export interface ResolvedDoc {
   toestand: string | null;
   /** OWMS modified date (document-level). */
   modified: string | null;
+  /**
+   * 'repealed' when the newest toestand's declared validity ended in the
+   * past (expired/withdrawn instrument), else 'in_force'. Feeds the
+   * mcp-base repealed-demotion ranking — it must be a fact, not a constant.
+   */
+  status: 'in_force' | 'repealed';
   recordCount: number;
 }
 
@@ -38,9 +45,10 @@ export async function resolveNewestToestand(
     fetchImpl?: typeof fetch;
     sruBase?: string;
     today?: string;
+    attempts?: number;
+    backoffMs?: number[];
   } = {},
 ): Promise<ResolvedDoc | null> {
-  const fetchImpl = opts.fetchImpl ?? fetch;
   const today = opts.today ?? new Date().toISOString().slice(0, 10);
 
   const url = new URL(opts.sruBase ?? SRU_BASE);
@@ -50,7 +58,13 @@ export async function resolveNewestToestand(
   url.searchParams.set('query', `dcterms.identifier==${bwbId}`);
   url.searchParams.set('maximumRecords', String(SRU_ID_PAGE_SIZE));
 
-  const response = await fetchImpl(url.toString());
+  // Resolution is the hottest network path of a sweep (one call per id) —
+  // transient failures retry with backoff before throwing.
+  const response = await fetchWithRetry(url.toString(), {
+    fetchImpl: opts.fetchImpl,
+    attempts: opts.attempts,
+    backoffMs: opts.backoffMs,
+  });
   if (!response.ok) {
     throw new Error(`SRU id lookup for ${bwbId} failed: HTTP ${response.status}`);
   }
@@ -74,12 +88,17 @@ export async function resolveNewestToestand(
   if (!chosen) return null;
 
   const version = parseToestandFromUrl(chosen.toestandUrl);
+  // The newest toestand of a live document has an open or future validity
+  // window; a past end date on the NEWEST toestand means the instrument is
+  // expired/withdrawn (e.g. BWBR0002024, validity ended 2007-01-31).
+  const expired = chosen.validityEnd != null && chosen.validityEnd < today;
   return {
     bwbId,
     title: chosen.title,
     toestandUrl: chosen.toestandUrl ?? null,
     toestand: version ? toestandKey(version) : null,
     modified: chosen.modified,
+    status: expired ? 'repealed' : 'in_force',
     recordCount: page.records.length,
   };
 }

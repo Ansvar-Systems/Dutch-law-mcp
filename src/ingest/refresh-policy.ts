@@ -57,10 +57,14 @@ export function decideFetch(opts: {
   if (!opts.seedExists) return 'fetch_new';
   if (!opts.refresh) return 'skip_existing';
 
+  // A seed without a toestand stamp predates newest-toestand acquisition and
+  // may hold OLDEST-consolidation content. No fallback may ever prove such a
+  // seed current — self-heal is unconditional.
+  const storedToestand = parseToestandKey(opts.existingMeta?.toestand);
+  if (!storedToestand) return 'refetch_unknown';
+
   const upstreamToestand = parseToestandKey(opts.upstreamToestand);
   if (upstreamToestand) {
-    const storedToestand = parseToestandKey(opts.existingMeta?.toestand);
-    if (!storedToestand) return 'refetch_unknown';
     const cmp = compareToestand(upstreamToestand, storedToestand);
     if (cmp > 0) return 'refetch_changed';
     if (cmp === 0) return 'skip_current';

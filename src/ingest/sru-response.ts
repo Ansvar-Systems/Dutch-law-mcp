@@ -16,6 +16,8 @@ export interface SruDocRecord {
   title: string;
   toestandUrl?: string;
   modified: string | null;
+  /** OWMS geldigheidsperiode_einddatum of this toestand record, when declared. */
+  validityEnd: string | null;
 }
 
 export interface ParsedSruPage {
@@ -57,14 +59,26 @@ export function parseSruResponse(xml: string): ParsedSruPage {
   if (!response) {
     throw new Error('Response is not an SRU searchRetrieveResponse (malformed or throttled)');
   }
+  if (response['diagnostics'] != null) {
+    // SRU 1.2 reports backend failures (throttling, index unavailable) as a
+    // 200 response with a diagnostics element and numberOfRecords=0 — data
+    // shaped exactly like "document gone". Never interpret it as data.
+    throw new Error(
+      'SRU response carries diagnostics (backend failure): ' +
+        JSON.stringify(response['diagnostics']).slice(0, 300),
+    );
+  }
 
+  // Empty elements parse to '' and Number('') === 0 — an EMPTY declaration
+  // must be "unusable" (null), never a confident zero.
   const totalText = textOf(response['numberOfRecords']);
-  const totalParsed = totalText == null ? Number.NaN : Number(totalText);
+  const totalParsed = totalText == null || totalText.trim() === '' ? Number.NaN : Number(totalText);
   const totalRecords = Number.isInteger(totalParsed) && totalParsed >= 0 ? totalParsed : null;
 
+  // SRU record positions are 1-based; 0/'' are glitch shapes, not positions.
   const nextText = textOf(response['nextRecordPosition']);
-  const nextParsed = nextText == null ? Number.NaN : Number(nextText);
-  const nextRecordPosition = Number.isFinite(nextParsed) ? nextParsed : null;
+  const nextParsed = nextText == null || nextText.trim() === '' ? Number.NaN : Number(nextText);
+  const nextRecordPosition = Number.isInteger(nextParsed) && nextParsed >= 1 ? nextParsed : null;
 
   const recordsContainer = response['records'] as Record<string, unknown> | undefined;
   const rawRecords = recordsContainer ? toArray(recordsContainer['record']) : [];
@@ -87,6 +101,7 @@ export function parseSruResponse(xml: string): ParsedSruPage {
     let title = '';
     let modified: string | null = null;
     let toestandUrl: string | undefined;
+    let validityEnd: string | null = null;
 
     if (originalData) {
       // The SRU response wraps owmskern inside overheidbwb:meta ('meta' after NS removal).
@@ -97,10 +112,15 @@ export function parseSruResponse(xml: string): ParsedSruPage {
 
       if (owmsKern) {
         const idStr = textOf(owmsKern['identifier']) ?? '';
-        const match = idStr.match(/BWB[RV]\d+/);
+        const match = idStr.match(/BWB[A-Z]\d+/);
         if (match) bwbId = match[0];
         title = textOf(owmsKern['title']) ?? '';
         modified = textOf(owmsKern['modified']);
+      }
+
+      const bwbipm = meta?.['bwbipm'] as Record<string, unknown> | undefined;
+      if (bwbipm) {
+        validityEnd = textOf(bwbipm['geldigheidsperiode_einddatum']);
       }
     }
 
@@ -109,13 +129,13 @@ export function parseSruResponse(xml: string): ParsedSruPage {
       if (typeof locatie === 'string') toestandUrl = locatie;
       // Fallback: extract the BWB id from the toestand URL.
       if (!bwbId && toestandUrl) {
-        const match = toestandUrl.match(/BWB[RV]\d+/);
+        const match = toestandUrl.match(/BWB[A-Z]\d+/);
         if (match) bwbId = match[0];
       }
     }
 
     if (bwbId) {
-      records.push({ bwbId, title, toestandUrl, modified });
+      records.push({ bwbId, title, toestandUrl, modified, validityEnd });
     } else {
       droppedCount++;
     }

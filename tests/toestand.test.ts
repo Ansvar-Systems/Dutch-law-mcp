@@ -125,12 +125,22 @@ describe('selectCurrentToestandRecord', () => {
     expect(selectCurrentToestandRecord(records, '2026-06-10')).toBe(records[1]);
   });
 
-  it('returns the first record when none carries a toestand URL', () => {
+  it('returns the LAST record when none carries a toestand URL (SRU is oldest-first)', () => {
     const records = [rec(undefined), rec(undefined)];
-    expect(selectCurrentToestandRecord(records, '2026-06-10')).toBe(records[0]);
+    expect(selectCurrentToestandRecord(records, '2026-06-10')).toBe(records[1]);
   });
 
   it('returns null for an empty record list', () => {
     expect(selectCurrentToestandRecord([], '2026-06-10')).toBeNull();
+  });
+});
+
+describe('selectCurrentToestandRecord — no-parseable-URL fallback (delta review)', () => {
+  // SRU orders toestand records OLDEST-FIRST. When no URL in a group parses,
+  // falling back to the FIRST record re-creates the oldest-consolidation pin;
+  // the LAST record is the newest available.
+  it('falls back to the LAST record when none carries a parseable toestand URL', () => {
+    const records = [{ toestandUrl: undefined }, { toestandUrl: 'https://x.test/weird-shape' }];
+    expect(selectCurrentToestandRecord(records, '2026-06-10')).toBe(records[1]);
   });
 });

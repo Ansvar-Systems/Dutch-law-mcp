@@ -22,3 +22,9 @@ describe('parseIdList', () => {
     expect(() => parseIdList('\n# only comments\n')).toThrow(/zero/i);
   });
 });
+
+describe('parseIdList — BWBW ids (delta review)', () => {
+  it('accepts any BWB+letter prefix (BWBW laws exist in the live corpus)', () => {
+    expect(parseIdList('BWBW5113\nBWBW7972')).toEqual(['BWBW5113', 'BWBW7972']);
+  });
+});

@@ -26,7 +26,7 @@ export interface ChassisStatuteSeed {
 }
 
 function chassisId(bwbId: string): string {
-  if (!/^BWB[RV]\d+$/.test(bwbId)) throw new Error(`unrecognised BWB id: ${bwbId}`);
+  if (!/^BWB[A-Z]\d+$/.test(bwbId)) throw new Error(`unrecognised BWB id: ${bwbId}`);
   // PROD-STABLE convention: the deployed dutch chassis serves canonical_refs of
   // the form "nl:BWBR0001821:<ref>" (verified 2026-06-10 against the live DB).
   // The fleet translator header documents "nl:bwb:0040940" but that form never

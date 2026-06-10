@@ -37,8 +37,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SEED_DIR = path.resolve(__dirname, '..', 'data', 'seed');
 const RATE_LIMIT_MS = 2000;
 
-const GONE_FILE = '/tmp/dutch-backfill-gone.txt';
-const ERROR_FILE = '/tmp/dutch-backfill-errors.txt';
+const QUARANTINE_DIR = path.resolve(__dirname, '..', 'data', 'seed-gone');
+// Run-stamped report paths: fixed names go stale and concurrent runs clobber.
+const RUN_STAMP = new Date().toISOString().replace(/[:.]/g, '-');
+const GONE_FILE = `/tmp/dutch-backfill-gone-${RUN_STAMP}.txt`;
+const ERROR_FILE = `/tmp/dutch-backfill-errors-${RUN_STAMP}.txt`;
 
 const listFile = process.argv[2];
 const FORCE = process.argv.includes('--force');
@@ -54,6 +57,16 @@ const ids = parseIdList(fs.readFileSync(listFile, 'utf-8'));
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+function quarantineSeed(id: string, seedPath: string): void {
+  // A gone document's seed must not keep flowing into builds as current law.
+  // Quarantine (not delete): the corpus differ surfaces the removal at swap
+  // time and the operator can audit/restore.
+  if (!fs.existsSync(seedPath)) return;
+  fs.mkdirSync(QUARANTINE_DIR, { recursive: true });
+  fs.renameSync(seedPath, path.join(QUARANTINE_DIR, `${id}.json`));
+  console.log(`    quarantined stale seed -> data/seed-gone/${id}.json`);
 }
 
 function readExistingMeta(seedPath: string): SeedIngestMeta | null {
@@ -92,6 +105,7 @@ async function main(): Promise<void> {
         console.log(`${tag} — no SRU records (gone upstream)`);
         gone++;
         goneIds.push(id);
+        quarantineSeed(id, seedPath);
         await sleep(RATE_LIMIT_MS);
         continue;
       }
@@ -119,18 +133,31 @@ async function main(): Promise<void> {
       }
 
       const res = await fetchWithRetry(resolved.toestandUrl);
-      if (!res.ok) {
+      if (res.status === 404 || res.status === 410) {
+        // Only an explicit not-found is "gone" — the SRU resolution seconds
+        // earlier proved the document EXISTS, so any other failure status
+        // (403/400/...) is an acquisition problem, never a deletion finding.
         console.log(`${tag} — HTTP ${res.status} (gone upstream)`);
         gone++;
         goneIds.push(id);
+        quarantineSeed(id, seedPath);
         await sleep(RATE_LIMIT_MS);
         continue;
       }
+      if (!res.ok) {
+        throw new Error(`document fetch failed: HTTP ${res.status}`);
+      }
       const parsed = parseBwbXml(await res.text());
+      if (parsed.bwb_id && parsed.bwb_id !== id) {
+        throw new Error(
+          `body identity mismatch: fetched ${resolved.toestandUrl}, got ${parsed.bwb_id}`,
+        );
+      }
       if (!parsed.provisions.length) {
         console.log(`${tag} — no provisions (gone/empty upstream)`);
         gone++;
         goneIds.push(id);
+        quarantineSeed(id, seedPath);
         await sleep(RATE_LIMIT_MS);
         continue;
       }
@@ -139,6 +166,7 @@ async function main(): Promise<void> {
         title: parsed.title,
         provisions: parsed.provisions,
         in_force_date: parsed.in_force_date,
+        status: resolved.status,
         sruModified: resolved.modified,
         toestand: resolved.toestand,
         now: new Date().toISOString(),

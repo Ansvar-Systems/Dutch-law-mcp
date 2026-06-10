@@ -79,11 +79,13 @@ data_freshness:
 # PRECONDITIONS for a fix-sweep run on this repo:
 #   - data/seed/ must be populated (not committed to git; build_cmd fails loud
 #     on an empty seed dir rather than building a 0-document database).
-#   - A first sweep after 2026-06-10 refetches the FULL corpus (pre-toestand
-#     stamps self-heal as refetch_unknown) and the backfill resolves ~1,170
-#     ids per-id over SRU: budget hours, not minutes. Set
-#     FIX_SWEEP_BUILD_TIMEOUT accordingly (default 1800s is too low for the
-#     first run; steady-state incremental runs fit comfortably).
+#   - TIMEOUT: fix-sweep's default FIX_SWEEP_BUILD_TIMEOUT (1800s) is too low
+#     for EVERY sweep of this repo, not just the first. Steady state alone is
+#     ~480 discovery pages plus ~1,170 per-id backfill resolutions at a 2s
+#     rate limit ≈ 60-90 min even when everything is current. Set
+#     FIX_SWEEP_BUILD_TIMEOUT=10800 for this repo. The first sweep after
+#     2026-06-10 additionally refetches the FULL corpus (pre-toestand stamps
+#     self-heal as refetch_unknown): budget several hours more.
 rebuild_contract:
   schema_version: '1.0'
   runnable: true

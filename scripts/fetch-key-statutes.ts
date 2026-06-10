@@ -1,4 +1,19 @@
 #!/usr/bin/env tsx
+
+/**
+ * DEPRECATED 2026-06-10 (Dutch-law-mcp#119): this script acquires the OLDEST
+ * toestand (un-versioned URL fallback / first-occurrence dedup / pinned
+ * historical dates) and writes seeds the refresh policy cannot reason about.
+ * Use `npm run ingest:sweep` or scripts/ingest-single-bwb.ts instead.
+ */
+if (process.env.FORCE_LEGACY_INGEST !== '1') {
+  console.error(
+    'DEPRECATED: this script acquires the OLDEST consolidation of each statute (issue #119). ' +
+      'Use `npm run ingest:sweep` or scripts/ingest-single-bwb.ts. ' +
+      'Set FORCE_LEGACY_INGEST=1 only if you understand the staleness consequences.',
+  );
+  process.exit(2);
+}
 /**
  * Direct fetcher for key Dutch statutes by BWB-ID.
  *
@@ -28,39 +43,155 @@ const RATE_LIMIT_MS = 1500;
  */
 const KEY_STATUTES: Array<{ bwbId: string; title: string; dates: string[] }> = [
   // Core civil law
-  { bwbId: 'BWBR0002656', title: 'Grondwet', dates: ['2023-02-22_0', '2022-08-25_0', '2018-02-17_0'] },
-  { bwbId: 'BWBR0005289', title: 'Burgerlijk Wetboek Boek 1', dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'] },
-  { bwbId: 'BWBR0003045', title: 'Burgerlijk Wetboek Boek 2', dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'] },
-  { bwbId: 'BWBR0005291', title: 'Burgerlijk Wetboek Boek 3', dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'] },
-  { bwbId: 'BWBR0005290', title: 'Burgerlijk Wetboek Boek 4', dates: ['2023-01-01_0', '2022-01-01_0', '2018-01-01_0'] },
-  { bwbId: 'BWBR0005288', title: 'Burgerlijk Wetboek Boek 5', dates: ['2023-01-01_0', '2022-01-01_0', '2020-01-01_0'] },
-  { bwbId: 'BWBR0005289', title: 'Burgerlijk Wetboek Boek 6', dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'] },
-  { bwbId: 'BWBR0005290', title: 'Burgerlijk Wetboek Boek 7', dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'] },
+  {
+    bwbId: 'BWBR0002656',
+    title: 'Grondwet',
+    dates: ['2023-02-22_0', '2022-08-25_0', '2018-02-17_0'],
+  },
+  {
+    bwbId: 'BWBR0005289',
+    title: 'Burgerlijk Wetboek Boek 1',
+    dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'],
+  },
+  {
+    bwbId: 'BWBR0003045',
+    title: 'Burgerlijk Wetboek Boek 2',
+    dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'],
+  },
+  {
+    bwbId: 'BWBR0005291',
+    title: 'Burgerlijk Wetboek Boek 3',
+    dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'],
+  },
+  {
+    bwbId: 'BWBR0005290',
+    title: 'Burgerlijk Wetboek Boek 4',
+    dates: ['2023-01-01_0', '2022-01-01_0', '2018-01-01_0'],
+  },
+  {
+    bwbId: 'BWBR0005288',
+    title: 'Burgerlijk Wetboek Boek 5',
+    dates: ['2023-01-01_0', '2022-01-01_0', '2020-01-01_0'],
+  },
+  {
+    bwbId: 'BWBR0005289',
+    title: 'Burgerlijk Wetboek Boek 6',
+    dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'],
+  },
+  {
+    bwbId: 'BWBR0005290',
+    title: 'Burgerlijk Wetboek Boek 7',
+    dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'],
+  },
   // Criminal law
-  { bwbId: 'BWBR0001854', title: 'Wetboek van Strafrecht', dates: ['2023-07-01_0', '2022-01-01_0', '2002-04-01_0'] },
-  { bwbId: 'BWBR0001903', title: 'Wetboek van Strafvordering', dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'] },
+  {
+    bwbId: 'BWBR0001854',
+    title: 'Wetboek van Strafrecht',
+    dates: ['2023-07-01_0', '2022-01-01_0', '2002-04-01_0'],
+  },
+  {
+    bwbId: 'BWBR0001903',
+    title: 'Wetboek van Strafvordering',
+    dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'],
+  },
   // Administrative law
-  { bwbId: 'BWBR0005537', title: 'Algemene wet bestuursrecht', dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'] },
+  {
+    bwbId: 'BWBR0005537',
+    title: 'Algemene wet bestuursrecht',
+    dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'],
+  },
   // Other important laws
-  { bwbId: 'BWBR0003245', title: 'Faillissementswet', dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'] },
-  { bwbId: 'BWBR0002320', title: 'Gemeentewet', dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'] },
-  { bwbId: 'BWBR0005416', title: 'Provinciewet', dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'] },
-  { bwbId: 'BWBR0001840', title: 'Wet op de rechterlijke organisatie', dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'] },
-  { bwbId: 'BWBR0001830', title: 'Wetboek van Koophandel', dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'] },
-  { bwbId: 'BWBR0002226', title: 'Auteurswet', dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'] },
-  { bwbId: 'BWBR0011353', title: 'Arbeidsomstandighedenwet', dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'] },
-  { bwbId: 'BWBR0006502', title: 'Wet op de identificatieplicht', dates: ['2023-01-01_0', '2022-01-01_0', '2020-01-01_0'] },
-  { bwbId: 'BWBR0011468', title: 'Vreemdelingenwet 2000', dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'] },
-  { bwbId: 'BWBR0012018', title: 'Wet arbeid en zorg', dates: ['2023-08-02_0', '2022-08-02_0', '2020-01-01_0'] },
-  { bwbId: 'BWBR0009405', title: 'Mededingingswet', dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'] },
-  { bwbId: 'BWBR0003738', title: 'Wet op het financieel toezicht', dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'] },
-  { bwbId: 'BWBR0002629', title: 'Algemene Ouderdomswet', dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'] },
-  { bwbId: 'BWBR0001860', title: 'Wet op de economische delicten', dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'] },
+  {
+    bwbId: 'BWBR0003245',
+    title: 'Faillissementswet',
+    dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'],
+  },
+  {
+    bwbId: 'BWBR0002320',
+    title: 'Gemeentewet',
+    dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'],
+  },
+  {
+    bwbId: 'BWBR0005416',
+    title: 'Provinciewet',
+    dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'],
+  },
+  {
+    bwbId: 'BWBR0001840',
+    title: 'Wet op de rechterlijke organisatie',
+    dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'],
+  },
+  {
+    bwbId: 'BWBR0001830',
+    title: 'Wetboek van Koophandel',
+    dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'],
+  },
+  {
+    bwbId: 'BWBR0002226',
+    title: 'Auteurswet',
+    dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'],
+  },
+  {
+    bwbId: 'BWBR0011353',
+    title: 'Arbeidsomstandighedenwet',
+    dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'],
+  },
+  {
+    bwbId: 'BWBR0006502',
+    title: 'Wet op de identificatieplicht',
+    dates: ['2023-01-01_0', '2022-01-01_0', '2020-01-01_0'],
+  },
+  {
+    bwbId: 'BWBR0011468',
+    title: 'Vreemdelingenwet 2000',
+    dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'],
+  },
+  {
+    bwbId: 'BWBR0012018',
+    title: 'Wet arbeid en zorg',
+    dates: ['2023-08-02_0', '2022-08-02_0', '2020-01-01_0'],
+  },
+  {
+    bwbId: 'BWBR0009405',
+    title: 'Mededingingswet',
+    dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'],
+  },
+  {
+    bwbId: 'BWBR0003738',
+    title: 'Wet op het financieel toezicht',
+    dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'],
+  },
+  {
+    bwbId: 'BWBR0002629',
+    title: 'Algemene Ouderdomswet',
+    dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'],
+  },
+  {
+    bwbId: 'BWBR0001860',
+    title: 'Wet op de economische delicten',
+    dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'],
+  },
   { bwbId: 'BWBR0044747', title: 'Omgevingswet', dates: ['2024-01-01_0', '2023-07-01_0'] },
-  { bwbId: 'BWBR0020368', title: 'Wet maatschappelijke ondersteuning 2015', dates: ['2023-07-01_0', '2022-01-01_0'] },
-  { bwbId: 'BWBR0035917', title: 'Jeugdwet', dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'] },
-  { bwbId: 'BWBR0015703', title: 'Wet werk en bijstand', dates: ['2023-01-01_0', '2022-01-01_0', '2015-01-01_0'] },
-  { bwbId: 'BWBR0005290', title: 'Burgerlijk Wetboek Boek 8', dates: ['2023-07-01_0', '2022-01-01_0'] },
+  {
+    bwbId: 'BWBR0020368',
+    title: 'Wet maatschappelijke ondersteuning 2015',
+    dates: ['2023-07-01_0', '2022-01-01_0'],
+  },
+  {
+    bwbId: 'BWBR0035917',
+    title: 'Jeugdwet',
+    dates: ['2023-07-01_0', '2022-01-01_0', '2020-01-01_0'],
+  },
+  {
+    bwbId: 'BWBR0015703',
+    title: 'Wet werk en bijstand',
+    dates: ['2023-01-01_0', '2022-01-01_0', '2015-01-01_0'],
+  },
+  {
+    bwbId: 'BWBR0005290',
+    title: 'Burgerlijk Wetboek Boek 8',
+    dates: ['2023-07-01_0', '2022-01-01_0'],
+  },
 ];
 
 const REPO_BASE = 'https://repository.officiele-overheidspublicaties.nl/bwb';
@@ -69,15 +200,19 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function writeSeedFile(bwbId: string, title: string, provisions: Array<{
-  provision_ref: string;
-  book?: string;
-  chapter?: string;
-  section?: string;
-  article: string;
-  title?: string;
-  content: string;
-}>): void {
+function writeSeedFile(
+  bwbId: string,
+  title: string,
+  provisions: Array<{
+    provision_ref: string;
+    book?: string;
+    chapter?: string;
+    section?: string;
+    article: string;
+    title?: string;
+    content: string;
+  }>,
+): void {
   const seedData = {
     documents: [
       {
@@ -104,7 +239,10 @@ function writeSeedFile(bwbId: string, title: string, provisions: Array<{
   fs.writeFileSync(filePath, JSON.stringify(seedData, null, 2), 'utf-8');
 }
 
-async function fetchStatute(bwbId: string, dates: string[]): Promise<{
+async function fetchStatute(
+  bwbId: string,
+  dates: string[],
+): Promise<{
   title: string;
   provisions: Array<{
     provision_ref: string;
@@ -162,12 +300,16 @@ async function main(): Promise<void> {
     const seedPath = path.join(SEED_DIR, `${statute.bwbId}.json`);
 
     if (fs.existsSync(seedPath)) {
-      console.log(`  [${i + 1}/${uniqueStatutes.length}] ${statute.bwbId} (${statute.title}) — already exists, skipping`);
+      console.log(
+        `  [${i + 1}/${uniqueStatutes.length}] ${statute.bwbId} (${statute.title}) — already exists, skipping`,
+      );
       skipCount++;
       continue;
     }
 
-    console.log(`  [${i + 1}/${uniqueStatutes.length}] ${statute.bwbId} (${statute.title}) — fetching...`);
+    console.log(
+      `  [${i + 1}/${uniqueStatutes.length}] ${statute.bwbId} (${statute.title}) — fetching...`,
+    );
 
     const result = await fetchStatute(statute.bwbId, statute.dates);
 

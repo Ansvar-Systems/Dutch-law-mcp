@@ -7,7 +7,7 @@
  * Invalid lines and empty lists now fail loud.
  */
 
-const ID_RE = /^BWB[RV]\d+$/;
+const ID_RE = /^BWB[A-Z]\d+$/;
 
 export function parseIdList(text: string): string[] {
   const ids: string[] = [];
@@ -25,7 +25,7 @@ export function parseIdList(text: string): string[] {
 
   if (invalid.length > 0) {
     throw new Error(
-      `id list contains ${invalid.length} line(s) that are not BWB ids (expected BWBR/BWBV + digits): ` +
+      `id list contains ${invalid.length} line(s) that are not BWB ids (expected BWB+letter + digits): ` +
         invalid.slice(0, 5).join(', ') +
         (invalid.length > 5 ? ', …' : ''),
     );

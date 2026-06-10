@@ -33,6 +33,8 @@ import {
 } from '../src/ingest/toestand.js';
 import { resolveNewestToestand } from '../src/ingest/sru-resolve.js';
 import { buildSeed } from '../src/ingest/seed-writer.js';
+import { fetchWithRetry } from '../src/ingest/http-retry.js';
+import { parseIdList } from '../src/ingest/id-list.js';
 
 // ---------------------------------------------------------------------------
 // Paths
@@ -110,7 +112,9 @@ async function fetchAndParseBWB(
   }>;
 } | null> {
   try {
-    const response = await fetch(toestandUrl);
+    // Retried fetch: a single transient 5xx among ~24k document fetches must
+    // not fail the statute (and thereby the whole sweep's exit code).
+    const response = await fetchWithRetry(toestandUrl);
     if (!response.ok) {
       console.warn(`  WARNING: Failed to fetch XML for ${bwbId}: ${response.status}`);
       return null;
@@ -118,6 +122,12 @@ async function fetchAndParseBWB(
 
     const xml = await response.text();
     const parsed = parseBwbXml(xml);
+    if (parsed.bwb_id && parsed.bwb_id !== bwbId) {
+      // Redirect surprises happen on this upstream; a body for a different
+      // document must never be written under this statute's identity.
+      console.warn(`  WARNING: ${toestandUrl} served ${parsed.bwb_id}, expected ${bwbId}`);
+      return null;
+    }
 
     return {
       title: parsed.title,
@@ -145,13 +155,19 @@ function writeSeedFile(
     title?: string;
     content: string;
   }>,
-  options: { in_force_date?: string; sruModified?: string | null; toestand?: string | null } = {},
+  options: {
+    in_force_date?: string;
+    sruModified?: string | null;
+    toestand?: string | null;
+    status?: 'in_force' | 'repealed';
+  } = {},
 ): void {
   const seedData = buildSeed({
     bwbId,
     title,
     provisions,
     in_force_date: options.in_force_date,
+    status: options.status,
     sruModified: options.sruModified ?? null,
     toestand: options.toestand ?? null,
     now: new Date().toISOString(),
@@ -181,14 +197,18 @@ async function main(): Promise<void> {
   let declaredTotal: number | null = null;
 
   let rawFound = 0;
+  let droppedTotal = 0;
+  const droppedPages: number[] = [];
   while (true) {
     // Retry transient broken pages with backoff; a persistently broken page
     // fails LOUD — never treated as end-of-pagination (2026-06-10 truncation).
-    // Health requires raw records AND zero extraction drops, so a page whose
-    // IDs fail extraction is also loud, and a healthy page whose records were
-    // merely deduplicated downstream never looks broken.
+    // Extraction drops are NOT page health: a record shape the parser cannot
+    // extract is deterministic (live example: BWBW-prefixed ids before they
+    // were accepted), so retrying cannot fix it — those are accumulated and
+    // fail the run AFTER discovery, with counts, where the operator can see
+    // every affected page at once.
     const p = await fetchPageWithRetry(fetchSRUPage, startRecord, {
-      isHealthy: (page) => page.rawCount > 0 && page.droppedCount === 0,
+      isHealthy: (page) => page.rawCount > 0,
     });
     // A glitched final page can omit numberOfRecords; keep the largest usable
     // declaration instead of letting the last page overwrite it.
@@ -196,6 +216,10 @@ async function main(): Promise<void> {
       declaredTotal = p.totalRecords;
     }
     rawFound += p.rawCount;
+    if (p.droppedCount > 0) {
+      droppedTotal += p.droppedCount;
+      droppedPages.push(startRecord);
+    }
     allRecords.push(...p.records);
 
     console.log(`  Found ${rawFound} / ${declaredTotal ?? '?'} records`);
@@ -203,9 +227,23 @@ async function main(): Promise<void> {
     if (p.nextRecordPosition == null) {
       break;
     }
+    if (p.nextRecordPosition <= startRecord) {
+      throw new Error(
+        `SRU nextRecordPosition ${p.nextRecordPosition} does not advance past ${startRecord} — refusing a non-progressing pagination`,
+      );
+    }
 
     startRecord = p.nextRecordPosition;
     await sleep(RATE_LIMIT_MS);
+  }
+
+  // Records whose id could not be extracted are missing coverage, not noise.
+  if (droppedTotal > 0) {
+    throw new Error(
+      `SRU discovery dropped ${droppedTotal} record(s) whose BWB id could not be extracted ` +
+        `(pages starting at: ${droppedPages.join(', ')}). The parser must learn their shape ` +
+        'before a sweep can be trusted — refusing a silently narrowed worklist.',
+    );
   }
 
   // A discovery that ends short of the declared total (or with no usable
@@ -304,6 +342,8 @@ async function main(): Promise<void> {
         in_force_date: result.in_force_date,
         sruModified: record.modified ?? null,
         toestand,
+        // A past validity end on the newest toestand = expired instrument.
+        status: record.validityEnd != null && record.validityEnd < today ? 'repealed' : 'in_force',
       });
       console.log(`    Parsed ${result.provisions.length} provisions`);
       successCount++;
@@ -315,6 +355,35 @@ async function main(): Promise<void> {
     }
 
     await sleep(RATE_LIMIT_MS);
+  }
+
+  // Phase 3 (refresh only): seeds on disk that neither this discovery nor the
+  // committed backfill list can ever refresh-check would go silently stale
+  // forever. Enumerate them — a warning today, the input for widening
+  // discovery (issue #119 follow-up).
+  if (REFRESH) {
+    const reachable = new Set<string>(uniqueRecords.map((r) => r.bwbId));
+    const backfillList = path.resolve(__dirname, '..', 'data', 'backfill-ids.txt');
+    if (fs.existsSync(backfillList)) {
+      try {
+        for (const id of parseIdList(fs.readFileSync(backfillList, 'utf-8'))) reachable.add(id);
+      } catch (err) {
+        console.warn(`  WARNING: could not read backfill list: ${String(err)}`);
+      }
+    }
+    const unreachable = fs
+      .readdirSync(SEED_DIR)
+      .filter((f) => f.startsWith('BWB') && f.endsWith('.json'))
+      .map((f) => f.replace(/\.json$/, ''))
+      .filter((id) => !reachable.has(id));
+    if (unreachable.length > 0) {
+      console.warn(
+        `  WARNING: ${unreachable.length} seed(s) on disk are reachable by NEITHER discovery nor ` +
+          `the backfill list and can never be refresh-checked: ${unreachable.slice(0, 10).join(', ')}` +
+          (unreachable.length > 10 ? ', …' : '') +
+          ' — add them to data/backfill-ids.txt or widen discovery.',
+      );
+    }
   }
 
   console.log();

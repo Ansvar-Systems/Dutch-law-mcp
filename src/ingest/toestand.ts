@@ -50,8 +50,10 @@ export function compareToestand(a: ToestandVersion, b: ToestandVersion): number 
 /**
  * Pick the record representing the CURRENT state of the law:
  * the newest toestand with date <= today; if every toestand is future-dated
- * (statute published but not yet in force), the earliest upcoming one; records
- * without a toestand URL only when nothing dated exists.
+ * (statute published but not yet in force), the earliest upcoming one. When
+ * no record carries a parseable toestand URL at all, fall back to the LAST
+ * record — SRU orders oldest-first, so the first record is the historic
+ * oldest-consolidation pin this module exists to remove.
  */
 export function selectCurrentToestandRecord<R extends { toestandUrl?: string }>(
   records: R[],
@@ -74,5 +76,5 @@ export function selectCurrentToestandRecord<R extends { toestandUrl?: string }>(
     }
   }
 
-  return bestCurrent?.record ?? bestFuture?.record ?? records[0];
+  return bestCurrent?.record ?? bestFuture?.record ?? records[records.length - 1];
 }

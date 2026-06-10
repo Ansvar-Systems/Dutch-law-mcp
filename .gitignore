@@ -175,3 +175,6 @@ data/eu-references-analysis.json
 # CLAUDE / AGENT WORK
 # ───────────────────────────────────────────────────────────────────────────
 .claude/
+
+# Quarantined seeds for documents verified gone upstream (audit trail, not corpus)
+data/seed-gone/

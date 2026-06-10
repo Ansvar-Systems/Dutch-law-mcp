@@ -34,7 +34,7 @@ describe('decideFetch — refresh mode', () => {
       decideFetch({
         seedExists: true,
         refresh: true,
-        existingMeta: { sru_modified: '2026-01-15' },
+        existingMeta: { sru_modified: '2026-01-15', toestand: '2020-01-01_0' },
         sruModified: '2026-05-02',
       }),
     ).toBe('refetch_changed');
@@ -45,7 +45,11 @@ describe('decideFetch — refresh mode', () => {
       decideFetch({
         seedExists: true,
         refresh: true,
-        existingMeta: { sru_modified: '2026-05-02', retrieved_at: '2026-05-03T06:00:00Z' },
+        existingMeta: {
+          sru_modified: '2026-05-02',
+          retrieved_at: '2026-05-03T06:00:00Z',
+          toestand: '2020-01-01_0',
+        },
         sruModified: '2026-05-02',
       }),
     ).toBe('skip_current');
@@ -67,7 +71,7 @@ describe('decideFetch — refresh mode', () => {
       decideFetch({
         seedExists: true,
         refresh: true,
-        existingMeta: { sru_modified: '2026-01-15' },
+        existingMeta: { sru_modified: '2026-01-15', toestand: '2020-01-01_0' },
         sruModified: null,
       }),
     ).toBe('refetch_unknown');
@@ -78,7 +82,7 @@ describe('decideFetch — refresh mode', () => {
       decideFetch({
         seedExists: true,
         refresh: true,
-        existingMeta: { sru_modified: 'not-a-date' },
+        existingMeta: { sru_modified: 'not-a-date', toestand: '2020-01-01_0' },
         sruModified: '2026-05-02',
       }),
     ).toBe('refetch_unknown');
@@ -172,7 +176,11 @@ describe('decideFetch — same-day window on the sru_modified fallback', () => {
       decideFetch({
         seedExists: true,
         refresh: true,
-        existingMeta: { sru_modified: '2026-06-15', retrieved_at: '2026-06-15T09:00:00Z' },
+        existingMeta: {
+          sru_modified: '2026-06-15',
+          retrieved_at: '2026-06-15T09:00:00Z',
+          toestand: '2026-01-01_0',
+        },
         sruModified: '2026-06-15',
       }),
     ).toBe('refetch_unknown');
@@ -183,7 +191,11 @@ describe('decideFetch — same-day window on the sru_modified fallback', () => {
       decideFetch({
         seedExists: true,
         refresh: true,
-        existingMeta: { sru_modified: '2026-06-15', retrieved_at: '2026-06-16T09:00:00Z' },
+        existingMeta: {
+          sru_modified: '2026-06-15',
+          retrieved_at: '2026-06-16T09:00:00Z',
+          toestand: '2026-01-01_0',
+        },
         sruModified: '2026-06-15',
       }),
     ).toBe('skip_current');
@@ -194,7 +206,7 @@ describe('decideFetch — same-day window on the sru_modified fallback', () => {
       decideFetch({
         seedExists: true,
         refresh: true,
-        existingMeta: { sru_modified: '2026-06-15' },
+        existingMeta: { sru_modified: '2026-06-15', toestand: '2026-01-01_0' },
         sruModified: '2026-06-15',
       }),
     ).toBe('refetch_unknown');
@@ -221,5 +233,38 @@ describe('stampIngestMeta', () => {
     const out = stampIngestMeta({}, { sruModified: null, now: '2026-06-10T08:00:00Z' });
     expect(out._ingest.sru_modified).toBeNull();
     expect(out._ingest.toestand).toBeNull();
+  });
+});
+
+describe('decideFetch — unconditional self-heal for unstamped seeds (delta review)', () => {
+  // Pre-toestand seeds hold OLDEST-consolidation content. The date fallback
+  // must never prove such a seed current: a missing stored toestand stamp is
+  // refetch_unknown even when upstream offers no toestand either.
+  it('refetches a seed without a toestand stamp even on the date-fallback path', () => {
+    expect(
+      decideFetch({
+        seedExists: true,
+        refresh: true,
+        existingMeta: { sru_modified: '2025-01-09', retrieved_at: '2026-06-10T05:00:00Z' },
+        sruModified: '2025-01-09',
+        upstreamToestand: null,
+      }),
+    ).toBe('refetch_unknown');
+  });
+
+  it('still allows skip_current on the date fallback for toestand-stamped seeds', () => {
+    expect(
+      decideFetch({
+        seedExists: true,
+        refresh: true,
+        existingMeta: {
+          sru_modified: '2025-01-09',
+          retrieved_at: '2026-06-10T05:00:00Z',
+          toestand: '2024-01-01_0',
+        },
+        sruModified: '2025-01-09',
+        upstreamToestand: null,
+      }),
+    ).toBe('skip_current');
   });
 });
