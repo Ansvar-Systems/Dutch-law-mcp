@@ -14,6 +14,8 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { XMLParser } from 'fast-xml-parser';
 import { parseBwbXml } from '../src/parsers/bwb-xml-parser.js';
+import { decideFetch, stampIngestMeta, type SeedIngestMeta } from '../src/ingest/refresh-policy.js';
+import { fetchPageWithRetry, assertDiscoveryComplete } from '../src/ingest/sru-pagination.js';
 
 // ---------------------------------------------------------------------------
 // Paths
@@ -36,6 +38,10 @@ const BWB_XML_BASE = 'https://repository.officiele-overheidspublicaties.nl/bwb';
 
 const RATE_LIMIT_MS = 2000;
 
+// --refresh: refetch statutes whose upstream OWMS modified date is newer than the
+// seed's _ingest stamp (or whose freshness cannot be proven). Default stays additive-only.
+const REFRESH = process.argv.includes('--refresh');
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -53,6 +59,7 @@ interface SRURecord {
   bwbId: string;
   title: string;
   toestandUrl?: string;
+  modified?: string | null;
 }
 
 /**
@@ -60,6 +67,7 @@ interface SRURecord {
  */
 async function fetchSRUPage(startRecord: number): Promise<{
   records: SRURecord[];
+  rawCount: number;
   totalRecords: number;
   nextRecordPosition: number | null;
 }> {
@@ -91,7 +99,7 @@ async function fetchSRUPage(startRecord: number): Promise<{
     | undefined;
 
   if (!searchRetrieveResponse) {
-    return { records: [], totalRecords: 0, nextRecordPosition: null };
+    return { records: [], rawCount: 0, totalRecords: 0, nextRecordPosition: null };
   }
 
   const totalRecords = Number(searchRetrieveResponse['numberOfRecords'] ?? 0);
@@ -100,7 +108,7 @@ async function fetchSRUPage(startRecord: number): Promise<{
 
   const recordsContainer = searchRetrieveResponse['records'] as Record<string, unknown> | undefined;
   if (!recordsContainer) {
-    return { records: [], totalRecords, nextRecordPosition: null };
+    return { records: [], rawCount: 0, totalRecords, nextRecordPosition: null };
   }
 
   const rawRecords = toArray(recordsContainer['record']);
@@ -122,6 +130,7 @@ async function fetchSRUPage(startRecord: number): Promise<{
     let bwbId = '';
     let title = '';
     let toestandUrl: string | undefined;
+    let modified: string | null = null;
 
     if (originalData) {
       // The SRU response wraps owmskern inside overheidbwb:meta (becomes 'meta' after NS removal)
@@ -149,6 +158,14 @@ async function fetchSRUPage(startRecord: number): Promise<{
           const titleText = (titleNode as Record<string, unknown>)['#text'];
           title = typeof titleText === 'string' ? titleText : '';
         }
+
+        const modifiedNode = owmsKern['modified'];
+        if (typeof modifiedNode === 'string') {
+          modified = modifiedNode;
+        } else if (modifiedNode && typeof modifiedNode === 'object') {
+          const modText = (modifiedNode as Record<string, unknown>)['#text'];
+          modified = typeof modText === 'string' ? modText : null;
+        }
       }
     }
 
@@ -168,11 +185,11 @@ async function fetchSRUPage(startRecord: number): Promise<{
     }
 
     if (bwbId) {
-      records.push({ bwbId, title, toestandUrl });
+      records.push({ bwbId, title, toestandUrl, modified });
     }
   }
 
-  return { records, totalRecords, nextRecordPosition };
+  return { records, rawCount: rawRecords.length, totalRecords, nextRecordPosition };
 }
 
 /**
@@ -234,30 +251,33 @@ function writeSeedFile(
     title?: string;
     content: string;
   }>,
-  options: { in_force_date?: string } = {},
+  options: { in_force_date?: string; sruModified?: string | null } = {},
 ): void {
-  const seedData = {
-    documents: [
-      {
-        id: bwbId,
-        type: 'statute' as const,
-        title,
-        status: 'in_force',
-        ...(options.in_force_date ? { in_force_date: options.in_force_date } : {}),
-        url: `https://wetten.overheid.nl/${bwbId}`,
-      },
-    ],
-    provisions: provisions.map((p) => ({
-      document_id: bwbId,
-      provision_ref: p.provision_ref,
-      book: p.book,
-      chapter: p.chapter,
-      section: p.section,
-      article: p.article,
-      title: p.title,
-      content: p.content,
-    })),
-  };
+  const seedData = stampIngestMeta(
+    {
+      documents: [
+        {
+          id: bwbId,
+          type: 'statute' as const,
+          title,
+          status: 'in_force',
+          ...(options.in_force_date ? { in_force_date: options.in_force_date } : {}),
+          url: `https://wetten.overheid.nl/${bwbId}`,
+        },
+      ],
+      provisions: provisions.map((p) => ({
+        document_id: bwbId,
+        provision_ref: p.provision_ref,
+        book: p.book,
+        chapter: p.chapter,
+        section: p.section,
+        article: p.article,
+        title: p.title,
+        content: p.content,
+      })),
+    },
+    { sruModified: options.sruModified ?? null, now: new Date().toISOString() },
+  );
 
   const filePath = path.join(SEED_DIR, `${bwbId}.json`);
   fs.writeFileSync(filePath, JSON.stringify(seedData, null, 2), 'utf-8');
@@ -282,20 +302,31 @@ async function main(): Promise<void> {
   let startRecord = 1;
   let totalRecords = 0;
 
+  let rawFound = 0;
   while (true) {
-    const page = await fetchSRUPage(startRecord);
-    totalRecords = page.totalRecords;
-    allRecords.push(...page.records);
+    // Retry transient broken pages with backoff; a persistently broken page
+    // fails LOUD — never treated as end-of-pagination (2026-06-10 truncation).
+    // Health = RAW record count, so a page whose IDs fail extraction is also
+    // loud, and a healthy page whose records were filtered never looks broken.
+    const p = await fetchPageWithRetry(fetchSRUPage, startRecord, {
+      isHealthy: (page) => page.rawCount > 0,
+    });
+    totalRecords = p.totalRecords;
+    rawFound += p.rawCount;
+    allRecords.push(...p.records);
 
-    console.log(`  Found ${allRecords.length} / ${totalRecords} records`);
+    console.log(`  Found ${rawFound} / ${totalRecords} records`);
 
-    if (page.nextRecordPosition == null) {
+    if (p.nextRecordPosition == null) {
       break;
     }
 
-    startRecord = page.nextRecordPosition;
+    startRecord = p.nextRecordPosition;
     await sleep(RATE_LIMIT_MS);
   }
+
+  // A discovery that ends short of the declared total is an error, not a result.
+  assertDiscoveryComplete(rawFound, totalRecords);
 
   console.log(`Discovered ${allRecords.length} toestand records.`);
 
@@ -319,22 +350,41 @@ async function main(): Promise<void> {
     const record = uniqueRecords[i];
     const seedPath = path.join(SEED_DIR, `${record.bwbId}.json`);
 
-    // Skip if seed file already exists
-    if (fs.existsSync(seedPath)) {
+    const seedExists = fs.existsSync(seedPath);
+    let existingMeta: SeedIngestMeta | null = null;
+    if (seedExists && REFRESH) {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(seedPath, 'utf-8')) as {
+          _ingest?: SeedIngestMeta;
+        };
+        existingMeta = parsed._ingest ?? null;
+      } catch {
+        existingMeta = null; // unreadable seed -> freshness unprovable -> refetch
+      }
+    }
+    const decision = decideFetch({
+      seedExists,
+      refresh: REFRESH,
+      existingMeta,
+      sruModified: record.modified,
+    });
+
+    if (decision === 'skip_existing' || decision === 'skip_current') {
       console.log(
-        `  [${i + 1}/${uniqueRecords.length}] ${record.bwbId} — already exists, skipping`,
+        `  [${i + 1}/${uniqueRecords.length}] ${record.bwbId} — ${decision === 'skip_current' ? 'current (upstream unchanged), skipping' : 'already exists, skipping'}`,
       );
       successCount++;
       continue;
     }
 
-    console.log(`  [${i + 1}/${uniqueRecords.length}] ${record.bwbId} — fetching...`);
+    console.log(`  [${i + 1}/${uniqueRecords.length}] ${record.bwbId} — ${decision}, fetching...`);
 
     const result = await fetchAndParseBWB(record.bwbId, record.toestandUrl);
 
     if (result && result.provisions.length > 0) {
       writeSeedFile(record.bwbId, result.title || record.title, result.provisions, {
         in_force_date: result.in_force_date,
+        sruModified: record.modified ?? null,
       });
       console.log(`    Parsed ${result.provisions.length} provisions`);
       successCount++;
