@@ -1,10 +1,7 @@
 # Dutch Law MCP Server
 
 <!-- ANSVAR-CTA-BEGIN -->
-> ### ▶ Try this MCP instantly via Ansvar Gateway
-> **50 free queries/day · no card required · OAuth signup at [ansvar.eu/gateway](https://ansvar.eu/gateway)**
->
-> One endpoint, one OAuth signup, access from any MCP-compatible client.
+> **The Dutch law corpus is now served through the Ansvar Gateway.** Connect your AI assistant (Claude, Copilot, Cursor, custom MCP client) to `https://gateway.ansvar.eu/mcp` — one OAuth connection, free tier available, covering this corpus plus EU regulations, national law across 28 audited jurisdictions, and CVE/security intelligence, every result with a verbatim source citation. Start at https://ansvar.eu/docs/quickstart
 
 ### Connect
 
@@ -29,7 +26,7 @@ claude mcp add ansvar --transport http https://gateway.ansvar.eu/mcp
 
 **Claude.ai** — Settings → Connectors → Add custom connector → paste `https://gateway.ansvar.eu/mcp`
 
-First request opens an OAuth flow at [ansvar.eu/gateway](https://ansvar.eu/gateway). After signup, your client is bound to your account; tier (free / premium / team / company) determines fan-out, quota, and which downstream MCPs are reachable.
+First request opens an OAuth signup flow (setup details: [ansvar.eu/docs/quickstart](https://ansvar.eu/docs/quickstart)). After signup, your client is bound to your account; tier (free / premium / team / company) determines fan-out, quota, and which downstream MCPs are reachable.
 
 ---
 
@@ -433,7 +430,7 @@ npm run populate:xrefs           # Populate EU cross-references
 
 ## More Ansvar MCPs
 
-Full fleet at [ansvar.eu/gateway](https://ansvar.eu/gateway).
+Full fleet coverage at [ansvar.eu/coverage](https://ansvar.eu/coverage).
 ## Contributing
 
 Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
