@@ -1,0 +1,131 @@
+# Skill manifest — Dutch-law research, served on Bindu.
+#
+# Bindu reads this file at startup and exposes the metadata under the
+# agent's /.well-known/agent.json card. Anything you declare here is
+# what *other* agents and clients use to decide whether to call you.
+
+# Basic Metadata
+id: dutch-law-research-v1
+name: dutch-law-research
+version: 1.0.0
+author: bindu.builder@getbindu.com
+
+# Description shown in the agent card
+description: |
+  Verified, citation-grounded research over Dutch federal law,
+  delivered by a Bindu agent. Answers questions in Dutch or English
+  using the Ansvar dutch-legal-citations MCP server (BWB corpus:
+  3,251 statutes, 77,531 provisions).
+
+  Every legal claim is grounded in a verbatim quote from
+  wetten.overheid.nl with a BWB-ID citation. The agent reaches the
+  corpus through 18 MCP tools — search_legislation, get_provision,
+  validate_citation, check_currency, build_legal_stance, get_eu_basis,
+  and others — and returns Bindu-signed artifacts so downstream
+  agents can verify origin cryptographically.
+
+  Out of scope: municipal (gemeentelijk) and provincial (provinciaal)
+  legislation, full EU case-law text, and any matter that requires
+  legal advice (the agent will redirect the user to a qualified
+  Dutch advocaat).
+
+tags:
+  - bindu
+  - legal
+  - dutch-law
+  - nederlands-recht
+  - citation
+  - compliance
+  - bwb
+  - wetten-overheid
+  - eu-law
+  - gdpr
+  - avg
+
+input_modes:
+  - text/plain
+
+output_modes:
+  - text/plain
+  - text/markdown
+
+examples:
+  - "Wat zegt artikel 6:162 BW over onrechtmatige daad?"
+  - "Is artikel 24 van de Mededingingswet nog van kracht?"
+  - "Valideer de citatie 'art. 6:162 BW'."
+  - "Welke EU-verordening implementeert de Uitvoeringswet AVG?"
+  - "Bouw een juridisch standpunt op over privacyrecht in Nederland."
+  - "What does Burgerlijk Wetboek Boek 6 say about contractual liability?"
+  - "Find Dutch provisions about trade secrets."
+  - "Geef de Grondwet artikel 1."
+  - "Wat is het EU-fundament van AVG art. 5?"
+  - "Welke Nederlandse wet implementeert de ePrivacy-richtlijn?"
+
+capabilities_detail:
+  legislation_search:
+    supported: true
+    backed_by_tool: search_legislation
+  provision_retrieval:
+    supported: true
+    backed_by_tool: get_provision
+  citation_validation:
+    supported: true
+    backed_by_tool: validate_citation
+    known_limitations:
+      - The MCP parser accepts statute citations in short-code form
+        (Sr, BW, Sv, Awb, Gw, Fw, WvK, Rv, Wft, Wm, WOR, WVW). Bare
+        article numbers with a letter suffix (for example
+        "art. 138b") are rejected — fall back to `search_legislation`.
+  currency_check:
+    supported: true
+    backed_by_tool: check_currency
+  eu_bridge:
+    supported: true
+    backed_by_tools:
+      - get_eu_basis
+      - get_dutch_implementations
+      - search_eu_implementations
+      - get_provision_eu_basis
+      - validate_eu_compliance
+  preparatory_works:
+    supported: true
+    tier: premium
+    backed_by_tool: get_preparatory_works
+  parliamentary_proceedings:
+    supported: true
+    backed_by_tool: search_parliamentary_proceedings
+  case_law:
+    supported: true
+    tier: premium
+    backed_by_tool: search_case_law
+  multi_source_stance:
+    supported: true
+    backed_by_tool: build_legal_stance
+  provenance:
+    supported: true
+    backed_by_tools:
+      - list_sources
+      - check_data_freshness
+      - about
+
+out_of_scope:
+  - Municipal (gemeentelijk) ordinances and APVs
+  - Provincial (provinciaal) legislation
+  - Full text of EU directives or CJEU case law
+  - Legal advice (research only — agent will redirect to a qualified advocaat)
+
+data_sources:
+  - name: wetten.overheid.nl
+    role: primary statute corpus (BWB API)
+    authority: Ministerie van Justitie en Veiligheid
+  - name: rechtspraak.nl
+    role: case law (premium)
+  - name: overheid.nl
+    role: Kamerstukken and preparatory works (premium)
+  - name: eur-lex.europa.eu
+    role: EU metadata for cross-references
+
+disclaimer: |
+  This is a research tool, NOT legal advice. Always verify critical
+  citations against wetten.overheid.nl before relying on them in
+  professional legal work.
